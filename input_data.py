@@ -86,8 +86,7 @@ def extract_labels(filename, one_hot=False):
 
 class DataSet(object):
 
-	def __init__(self, images, labels, fake_data=False, one_hot=False,
-							 dtype=tf.float32):
+	def __init__(self, images, labels, fake_data=False, one_hot=False,dtype=tf.float32):
 
 		"""Construct a DataSet.
 
@@ -98,8 +97,7 @@ class DataSet(object):
 
 		dtype = tf.as_dtype(dtype).base_dtype
 		if dtype not in (tf.uint8, tf.float32):
-			raise TypeError('Invalid image dtype %r, expected uint8 or float32' %
-											dtype)
+			raise TypeError('Invalid image dtype %r, expected uint8 or float32' %dtype)
 
 		if fake_data:
 			self._num_examples = 10000
@@ -114,8 +112,7 @@ class DataSet(object):
 			# to [num examples, rows*columns] (assuming depth == 1)
 
 			assert images.shape[3] == 1
-			images = images.reshape(images.shape[0],
-															images.shape[1] * images.shape[2])
+			images = images.reshape(images.shape[0],images.shape[1] * images.shape[2])
 
 			if dtype == tf.float32:
 				# Convert from [0, 255] -> [0.0, 1.0].
