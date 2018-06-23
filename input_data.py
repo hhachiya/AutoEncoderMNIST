@@ -106,8 +106,7 @@ class DataSet(object):
 			self.one_hot = one_hot
 		else:
 			assert images.shape[0] == labels.shape[0], (
-					'images.shape: %s labels.shape: %s' % (images.shape,
-																								 labels.shape))
+					'images.shape: %s labels.shape: %s' % (images.shape,labels.shape))
 
 			self._num_examples = images.shape[0]
 
@@ -217,8 +216,7 @@ def read_data_sets(train_dir,fake_data=False, one_hot=False, dtype=tf.float32):
 	train_labels = train_labels[VALIDATION_SIZE:]
 
 	data_sets.train = DataSet(train_images, train_labels, dtype=dtype)
-	data_sets.validation = DataSet(validation_images, validation_labels,
-																 dtype=dtype)
+	data_sets.validation = DataSet(validation_images, validation_labels, dtype=dtype)
 	data_sets.test = DataSet(test_images, test_labels, dtype=dtype)
 
 	return data_sets
