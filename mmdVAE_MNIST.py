@@ -121,7 +121,7 @@ def decoderImg(z,z_dim,reuse=False):
 		
 		# 14 x 2 = 28
 		convW2 = weight_variable("convW2", [3, 3, 1, 32])
-		convB2 = bias_variable("convB2", [32])
+		convB2 = bias_variable("convB2", [1])
 		output = conv2d_t_relu(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
 		
 		return output
@@ -190,7 +190,7 @@ batch_size = 200
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
-for i in range(3000):
+for i in range(2000):
 	
 	# 学習データの作成
 	batch = myImage.train.next_batch(batch_size)
@@ -205,7 +205,7 @@ for i in range(3000):
 		# テストデータの作成
 		batch_test = myImage.test.next_batch(batch_size)
 		batch_x_test_img = np.reshape(batch_test[0],(batch_size,28,28,1))
-
+		
 		# テストの実行
 		test_xr_img,test_z_img = sess.run([test_xr_img_op,test_z_img_op], feed_dict={x_img: batch_x_test_img})
 
@@ -240,9 +240,6 @@ for i in range(3000):
 			fig1.axes.get_yaxis().set_ticks([])
 	
 		path = os.path.join(visualPath,"img_sample_{}.png".format(i))
-		
-
-				
 		plt.savefig(path)
 		#--------------
 
@@ -251,6 +248,4 @@ for i in range(3000):
 		saver = tf.train.Saver()
 		saver.save(sess,"./models/img_{}.ckpt".format(i))
 		#--------------
-
-#---------------------
-
+#===========================
