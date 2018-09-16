@@ -26,6 +26,12 @@ if len(sys.argv) > 2:
 	# テスト時のノイズの割合
 	testFakeRatio = float(sys.argv[2])
 
+	# trail no.
+	if len(sys.argv) > 3:
+		trialNo = int(sys.argv[3])
+	else:
+		trialNo = 1	
+
 else:
 	# 文字の種類
 	targetChar = 0
@@ -46,7 +52,7 @@ threFake = 0.5
 threSquaredLoss = 200
 
 # ファイル名のpostFix
-postFix = "_{}_{}".format(targetChar, testFakeRatio)
+postFix = "_{}_{}_{}".format(targetChar, testFakeRatio, trialNo)
 
 # バッチデータ数
 batch_size = 300
@@ -372,8 +378,8 @@ for ite in range(10000):
 	lossRAll_values.append(lossRAll_value)
 	lossD_values.append(lossD_value)
 	
-	if ite%10 == 0:
-		print("ite: %d, lossR=%f, lossRAll=%f, lossD=%f" % (ite, lossR_value, lossRAll_value, lossD_value))
+	if ite%100 == 0:
+		print("char: %d, ratio: %f, ite: %d, lossR=%f, lossRAll=%f, lossD=%f" % (targetChar, testFakeRatio, ite, lossR_value, lossRAll_value, lossD_value))
 	#--------------
 
 	#--------------
