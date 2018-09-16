@@ -113,6 +113,7 @@ class DataSet(object):
 
 			assert images.shape[3] == 1
 			images = images.reshape(images.shape[0],images.shape[1] * images.shape[2])
+			images = images.astype(numpy.float32)
 
 			if dtype == tf.float32:
 				# Convert from [0, 255] -> [0.0, 1.0].

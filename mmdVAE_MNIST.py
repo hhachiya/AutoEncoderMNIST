@@ -81,6 +81,7 @@ def encoderImg(x, z_dim, reuse=False):
 		# 2次元画像を１次元に変更して全結合層へ渡す
 		# np.prod で配列要素の積を算出
 		conv2size = np.prod(conv2.get_shape().as_list()[1:])
+		pdb.set_trace()
 		conv2 = tf.reshape(conv2, [-1, conv2size])
 		
 		# 7 x 7 x 32 -> z-dim
@@ -190,7 +191,7 @@ batch_size = 200
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
-for i in range(2000):
+for i in range(1000):
 	
 	# 学習データの作成
 	batch = myImage.train.next_batch(batch_size)
@@ -246,6 +247,6 @@ for i in range(2000):
 		#--------------
 		# チェックポイントの保存
 		saver = tf.train.Saver()
-		saver.save(sess,"./models/img_{}.ckpt".format(i))
+		saver.save(sess,"./models/model.ckpt".format(i))
 		#--------------
 #===========================
