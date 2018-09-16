@@ -473,6 +473,8 @@ with open(path, "wb") as fp:
 	pickle.dump(batch_x_fake,fp)
 	pickle.dump(encoderR_train_value,fp)
 	pickle.dump(decoderR_train_value,fp)
+	pickle.dump(predictFake_train_value,fp)
+	pickle.dump(predictTrue_train_value,fp)	
 	pickle.dump(test_x,fp)
 	pickle.dump(test_y,fp)
 	pickle.dump(decoderR_test_value,fp)

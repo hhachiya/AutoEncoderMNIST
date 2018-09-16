@@ -64,6 +64,8 @@ with open(path, "rb") as fp:
 	batch_x_fake = pickle.load(fp)
 	encoderR_train_value = pickle.load(fp)
 	decoderR_train_value = pickle.load(fp)
+	predictFake_train_value = pickle.load(fp)
+	predictTrue_train_value = pickle.load(fp)
 	test_x = pickle.load(fp)
 	test_y = pickle.load(fp)
 	decoderR_test_value = pickle.load(fp)
@@ -80,5 +82,6 @@ with open(path, "rb") as fp:
 	lossD_values = pickle.load(fp)
 	params = pickle.load(fp)	
 #--------------
+
 
 pdb.set_trace()
