@@ -19,16 +19,13 @@ np.random.seed(0)
 # パラメータの設定
 z_dim_R = 100
 
-if len(sys.argv) > 2:
+if len(sys.argv) > 1:
 	# 文字の種類
 	targetChar = int(sys.argv[1])
 
-	# テスト時のノイズの割合
-	testFakeRatio = float(sys.argv[2])
-
 	# trail no.
-	if len(sys.argv) > 3:
-		trialNo = int(sys.argv[3])
+	if len(sys.argv) > 2:
+		trialNo = int(sys.argv[2])
 	else:
 		trialNo = 1	
 
@@ -36,14 +33,14 @@ else:
 	# 文字の種類
 	targetChar = 0
 
-	# テスト時のノイズの割合
-	testFakeRatio = 0.5
-
 # Rの二乗誤差の重み係数
 lambdaR = 0.4
 
 # log(0)と0割防止用
 lambdaSmall = 0.00001
+
+# テストデータにおける偽物の割合
+testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # 予測結果に対する閾値
 threFake = 0.5
@@ -52,13 +49,13 @@ threFake = 0.5
 threSquaredLoss = 200
 
 # ファイル名のpostFix
-postFix = "_{}_{}_{}".format(targetChar, testFakeRatio, trialNo)
+postFix = "_{}_{}".format(targetChar, trialNo)
 
 # バッチデータ数
 batch_size = 300
 
 # 変数をまとめたディクショナリ
-params = {'z_dim_R':z_dim_R, 'testFakeRatio':testFakeRatio, 'labmdaR':lambdaR,
+params = {'z_dim_R':z_dim_R, 'testFakeRatios':testFakeRatios, 'labmdaR':lambdaR,
 'threFake':threFake, 'targetChar':targetChar,'batch_size':batch_size}
 
 trainMode = 1
@@ -66,6 +63,19 @@ trainMode = 1
 visualPath = 'visualization'
 modelPath = 'models'
 logPath = 'logs'
+#===========================
+
+#===========================
+# 評価値の計算用の関数
+def calcEval(predict, gt, threFake=0.5):
+	predict[predict >= threFake] = 1.
+	predict[predict < threFake] = 0.
+
+	recall = np.sum(predict[gt==1])/np.sum(gt==1)
+	precision = np.sum(predict[gt==1])/np.sum(predict==1)
+	f1 = 2 * (precision * recall)/(precision + recall)
+
+	return recall, precision, f1
 #===========================
 
 #===========================
@@ -309,40 +319,30 @@ myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
 #--------------
 
 #--------------
-# テストデータの作成
-targetInds = np.where(myData.test.labels == targetChar)[0]
-
-# データの数
-fakeNum = int(np.floor(len(targetInds)*testFakeRatio))
-targetNum = len(targetInds) - fakeNum
-
-# Fakeのindex（シャッフル）
-fakeInds = np.setdiff1d(np.arange(len(myData.test.labels)),targetInds)
-fakeInds = fakeInds[np.random.permutation(len(fakeInds))[:fakeNum]]
+# テストデータの準備
+targetTestInds = np.where(myData.test.labels == targetChar)[0]
 
 # Trueのindex（シャッフル）
-targetIndsSelected = targetInds[np.random.permutation(len(targetInds))[:targetNum]]
+targetTestIndsShuffle = targetTestInds[np.random.permutation(len(targetTestInds))]
 
-# reshape & concat
-test_x = np.reshape(myData.test.images[targetIndsSelected],(len(targetIndsSelected),28,28,1))
-test_x_fake = np.reshape(myData.test.images[fakeInds],(len(fakeInds),28,28,1))
-test_x = np.vstack([test_x, test_x_fake])
-test_y = np.hstack([np.ones(len(targetIndsSelected)),np.zeros(len(fakeInds))])
+# Fakeのindex（シャッフル）
+fakeTestInds = np.setdiff1d(np.arange(len(myData.test.labels)),targetTestInds)
 #--------------
 
 #--------------
 # 評価値、損失を格納するリスト
-recallDXs = []
-precisionDXs = []
-f1DXs = []
-recallDRXs = []
-precisionDRXs = []
-f1DRXs = []
+recallDXs = [[] for tmp in np.arange(len(testFakeRatios))]
+precisionDXs = [[] for tmp in np.arange(len(testFakeRatios))]
+f1DXs = [[] for tmp in np.arange(len(testFakeRatios))]
+recallDRXs = [[] for tmp in np.arange(len(testFakeRatios))]
+precisionDRXs = [[] for tmp in np.arange(len(testFakeRatios))]
+f1DRXs = [[] for tmp in np.arange(len(testFakeRatios))]
 
 lossR_values = []
 lossRAll_values = []
 lossD_values = []
 #--------------
+
 
 for ite in range(10000):
 	
@@ -352,8 +352,8 @@ for ite in range(10000):
 	batch_x_all = np.reshape(batch[0],(batch_size,28,28,1))
 
 	# targetCharのみのデータ
-	targetInds = np.where(batch[1] == targetChar)[0]
-	batch_x = batch_x_all[targetInds]
+	targetTrainInds = np.where(batch[1] == targetChar)[0]
+	batch_x = batch_x_all[targetTrainInds]
 	
 	# ノイズを追加する(ガウシアンノイズ)
 	# 正規分布に従う乱数を出力
@@ -379,90 +379,105 @@ for ite in range(10000):
 	lossD_values.append(lossD_value)
 	
 	if ite%100 == 0:
-		print("char: %d, ratio: %f, ite: %d, lossR=%f, lossRAll=%f, lossD=%f" % (targetChar, testFakeRatio, ite, lossR_value, lossRAll_value, lossD_value))
+		print("char: %d, ite: %d, lossR=%f, lossRAll=%f, lossD=%f" % (targetChar, ite, lossR_value, lossRAll_value, lossD_value))
 	#--------------
 
 	#--------------
 	# テスト
-	if ite % 200 == 0:
-		predictDX_value, predictDRX_value, decoderR_test_value = sess.run([predictDX, predictDRX, decoderR_test], feed_dict={xTest: test_x})
-
+	if ite % 1000 == 0:
+		
+		predictDX_value = [[] for tmp in np.arange(len(testFakeRatios))]
+		predictDRX_value = [[] for tmp in np.arange(len(testFakeRatios))]
+		decoderR_test_value = [[] for tmp in np.arange(len(testFakeRatios))]
+		
 		#--------------
-		# 評価値の計算用の関数
-		def calcEval(predict, gt, threFake=0.5):
-			predict[predict >= threFake] = 1.
-			predict[predict < threFake] = 0.
+		# テストデータの作成	
+		for ind, testFakeRatio in enumerate(testFakeRatios):
+		
+			# データの数
+			fakeNum = int(np.floor(len(targetTestInds)*testFakeRatio))
+			targetNum = len(targetTestInds) - fakeNum
 			
-			recall = np.sum(predict[gt==1])/np.sum(gt==1)
-			precision = np.sum(predict[gt==1])/np.sum(predict==1)
-			f1 = 2 * (precision * recall)/(precision + recall)
+			# Trueのindex
+			targetTestIndsSelected = targetTestIndsShuffle[:targetNum]
 
-			return recall, precision, f1
-		#--------------
-		
-		#--------------
-		# 評価値の計算と記録
-		recallDX, precisionDX, f1DX = calcEval(predictDX_value[:,0], test_y, threFake)
-		recallDRX, precisionDRX, f1DRX = calcEval(predictDRX_value[:,0], test_y, threFake)
-		
-		recallDXs.append(recallDX)
-		precisionDXs.append(precisionDX)
-		f1DXs.append(f1DX)
-		
-		recallDRXs.append(recallDRX)
-		precisionDRXs.append(precisionDRX)
-		f1DRXs.append(f1DRX)
-		#--------------
+			# Fakeのindex
+			fakeTestIndsSelected = fakeTestInds[np.random.permutation(len(fakeTestInds))[:fakeNum]]
 
-		#--------------
-		print("\t recallDX=%f, precisionDX=%f, f1DX=%f" % (recallDX, precisionDX, f1DX))
-		print("\t recallDRX=%f, precisionDRX=%f, f1DRX=%f" % (recallDRX, precisionDRX, f1DRX))
-		#--------------
-		
-		#--------------
-		# 画像を保存
-		plt.close()
-		fig, figInds = plt.subplots(nrows=2, ncols=10, sharex=True)
-	
-		for figInd in np.arange(figInds.shape[1]):
-			fig0 = figInds[0][figInd].imshow(test_x[figInd,:,:,0])
-			fig1 = figInds[1][figInd].imshow(decoderR_test_value[figInd,:,:,0])
+			# reshape & concat
+			test_x = np.reshape(myData.test.images[targetTestIndsSelected],(len(targetTestIndsSelected),28,28,1))
+			test_x_fake = np.reshape(myData.test.images[fakeTestIndsSelected],(len(fakeTestIndsSelected),28,28,1))
+			test_x = np.vstack([test_x, test_x_fake])
+			test_y = np.hstack([np.ones(len(targetTestIndsSelected)),np.zeros(len(fakeTestIndsSelected))])
 
-			# ticks, axisを隠す
-			fig0.axes.get_xaxis().set_visible(False)
-			fig0.axes.get_yaxis().set_visible(False)
-			fig0.axes.get_xaxis().set_ticks([])
-			fig0.axes.get_yaxis().set_ticks([])
-			fig1.axes.get_xaxis().set_visible(False)
-			fig1.axes.get_yaxis().set_visible(False)
-			fig1.axes.get_xaxis().set_ticks([])
-			fig1.axes.get_yaxis().set_ticks([])
-	
-		path = os.path.join(visualPath,"img{}_{}.png".format(postFix,ite))
-		plt.savefig(path)
-		#--------------
-		
-		#--------------
-		# 画像を保存
-		plt.close()
-		fig, figInds = plt.subplots(nrows=2, ncols=10, sharex=True)
-	
-		for figInd in np.arange(figInds.shape[1]):
-			fig0 = figInds[0][figInd].imshow(test_x[-figInd,:,:,0])
-			fig1 = figInds[1][figInd].imshow(decoderR_test_value[-figInd,:,:,0])
+			predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind] = sess.run([predictDX, predictDRX, decoderR_test],
+													feed_dict={xTest: test_x})
+													
 
-			# ticks, axisを隠す
-			fig0.axes.get_xaxis().set_visible(False)
-			fig0.axes.get_yaxis().set_visible(False)
-			fig0.axes.get_xaxis().set_ticks([])
-			fig0.axes.get_yaxis().set_ticks([])
-			fig1.axes.get_xaxis().set_visible(False)
-			fig1.axes.get_yaxis().set_visible(False)
-			fig1.axes.get_xaxis().set_ticks([])
-			fig1.axes.get_yaxis().set_ticks([])
+			#--------------
+			# 評価値の計算と記録
+			recallDX, precisionDX, f1DX = calcEval(predictDX_value[ind][:,0], test_y, threFake)
+			recallDRX, precisionDRX, f1DRX = calcEval(predictDRX_value[ind][:,0], test_y, threFake)
+		
+			recallDXs[ind].append(recallDX)
+			precisionDXs[ind].append(precisionDX)
+			f1DXs[ind].append(f1DX)
+		
+			recallDRXs[ind].append(recallDRX)
+			precisionDRXs[ind].append(precisionDRX)
+			f1DRXs[ind].append(f1DRX)
+			#--------------
+
+			#--------------
+			print("\t recallDX=%f, precisionDX=%f, f1DX=%f" % (recallDX, precisionDX, f1DX))
+			print("\t recallDRX=%f, precisionDRX=%f, f1DRX=%f" % (recallDRX, precisionDRX, f1DRX))
+			#--------------
+
+			#--------------
+			# 画像を保存
+			plt.close()
+			fig, figInds = plt.subplots(nrows=2, ncols=10, sharex=True)
 	
-		path = os.path.join(visualPath,"img_fake_{}_{}.png".format(postFix,ite))
-		plt.savefig(path)
+			for figInd in np.arange(figInds.shape[1]):
+				fig0 = figInds[0][figInd].imshow(test_x[figInd,:,:,0])
+				fig1 = figInds[1][figInd].imshow(decoderR_test_value[ind][figInd,:,:,0])
+
+				# ticks, axisを隠す
+				fig0.axes.get_xaxis().set_visible(False)
+				fig0.axes.get_yaxis().set_visible(False)
+				fig0.axes.get_xaxis().set_ticks([])
+				fig0.axes.get_yaxis().set_ticks([])
+				fig1.axes.get_xaxis().set_visible(False)
+				fig1.axes.get_yaxis().set_visible(False)
+				fig1.axes.get_xaxis().set_ticks([])
+				fig1.axes.get_yaxis().set_ticks([])
+	
+			path = os.path.join(visualPath,"img{}_{}_{}.png".format(postFix,testFakeRatio,ite))
+			plt.savefig(path)
+			#--------------
+		
+			#--------------
+			# 画像を保存
+			plt.close()
+			fig, figInds = plt.subplots(nrows=2, ncols=10, sharex=True)
+		
+			for figInd in np.arange(figInds.shape[1]):
+				fig0 = figInds[0][figInd].imshow(test_x[-figInd,:,:,0])
+				fig1 = figInds[1][figInd].imshow(decoderR_test_value[ind][-figInd,:,:,0])
+
+				# ticks, axisを隠す
+				fig0.axes.get_xaxis().set_visible(False)
+				fig0.axes.get_yaxis().set_visible(False)
+				fig0.axes.get_xaxis().set_ticks([])
+				fig0.axes.get_yaxis().set_ticks([])
+				fig1.axes.get_xaxis().set_visible(False)
+				fig1.axes.get_yaxis().set_visible(False)
+				fig1.axes.get_xaxis().set_ticks([])
+				fig1.axes.get_yaxis().set_ticks([])
+	
+			path = os.path.join(visualPath,"img_fake_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
+			plt.savefig(path)
+			#--------------
 		#--------------
 		
 		#--------------
