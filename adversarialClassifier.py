@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 import tensorflow as tf
 from tensorflow.python.ops import nn_ops
+from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
 import math, os
 import pickle
 import pdb
-import input_data
+#import input_data
 import matplotlib.pylab as plt
 import sys
 
@@ -49,7 +50,7 @@ threFake = 0.5
 threSquaredLoss = 200
 
 # ファイル名のpostFix
-postFix = "_{}_{}".format(targetChar, trialNo)
+postFix = "_{}_{}_0-1mnist".format(targetChar, trialNo)
 
 # バッチデータ数
 batch_size = 300
@@ -57,6 +58,10 @@ batch_size = 300
 # 変数をまとめたディクショナリ
 params = {'z_dim_R':z_dim_R, 'testFakeRatios':testFakeRatios, 'labmdaR':lambdaR,
 'threFake':threFake, 'targetChar':targetChar,'batch_size':batch_size}
+
+# ノイズの大きさ
+noiseSigma = 0.155
+
 
 trainMode = 1
 
@@ -123,6 +128,11 @@ def conv2d_t_sigmoid(inputs, w, b, output_shape, stride):
 def conv2d_t_relu(inputs, w, b, output_shape, stride):
 	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
 	conv = tf.nn.relu(conv)
+	return conv
+
+# 2D deconvolution layer
+def conv2d_t(inputs, w, b, output_shape, stride):
+	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
 	return conv
 	
 # fc layer with ReLU
@@ -203,8 +213,9 @@ def decoderR(z,z_dim,reuse=False):
 		# 14 x 2 = 28
 		convW2 = weight_variable("convW2", [3, 3, 1, 32])
 		convB2 = bias_variable("convB2", [1])
-		#output = conv2d_t_sigmoid(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
-		output = conv2d_t_relu(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
+		output = conv2d_t(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
+
+		output = tf.nn.tanh(output)
 		
 		return output
 #===========================
@@ -266,9 +277,17 @@ decoderR_test = decoderR(encoderR_test, z_dim_R, reuse=True)
 #学習用
 predictFake_train = DNet(decoderR_train)
 predictTrue_train = DNet(xTrue,reuse=True)
-lossR = tf.reduce_mean(tf.square(decoderR_train - xTrue))
-lossRAll = tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + lambdaR * lossR
-lossD = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - DNet(decoderR_train,reuse=True) +  lambdaSmall))
+
+#lossR = tf.reduce_mean(tf.square(decoderR_train - xTrue))
+#lossRAll = tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + lambdaR * lossR
+lossR = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=decoderR_train, labels=xTrue))
+lossRAll = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictFake_train, labels=tf.ones_like(predictFake_train))) + lambdaR * lossR
+
+#lossD = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train +  lambdaSmall))
+lossDTrue = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictTrue_train, labels=tf.zeros_like(predictTrue_train)))
+lossDFake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictFake_train, labels=tf.ones_like(predictFake_train)))
+lossD = lossDTrue + lossDFake
+
 
 # R & Dの変数
 Rvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="encoderR") + tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="decoderR")
@@ -314,8 +333,8 @@ sess.run(tf.global_variables_initializer())
 
 #--------------
 # MNISTのデータの取得
-myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
-#myData = input_data.read_data_sets("MNIST/")
+#myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
+myData = input_data.read_data_sets("MNIST/")
 #--------------
 
 #--------------
@@ -344,7 +363,7 @@ lossD_values = []
 #--------------
 
 
-for ite in range(10000):
+for ite in range(30000):
 	
 	#--------------
 	# 学習データの作成
@@ -357,7 +376,7 @@ for ite in range(10000):
 	
 	# ノイズを追加する(ガウシアンノイズ)
 	# 正規分布に従う乱数を出力
-	batch_x_fake = batch_x + np.random.normal(0,1,batch_x.shape)
+	batch_x_fake = batch_x + np.random.normal(0,noiseSigma,batch_x.shape)
 	#--------------
 
 	#--------------
@@ -379,7 +398,7 @@ for ite in range(10000):
 	lossD_values.append(lossD_value)
 	
 	if ite%100 == 0:
-		print("char: %d, ite: %d, lossR=%f, lossRAll=%f, lossD=%f" % (targetChar, ite, lossR_value, lossRAll_value, lossD_value))
+		print("#%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f" % (ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value))
 	#--------------
 
 	#--------------
@@ -429,7 +448,7 @@ for ite in range(10000):
 			#--------------
 
 			#--------------
-			print("\t recallDX=%f, precisionDX=%f, f1DX=%f" % (recallDX, precisionDX, f1DX))
+			print("ratio:%f \t recallDX=%f, precisionDX=%f, f1DX=%f" % (testFakeRatio, recallDX, precisionDX, f1DX))
 			print("\t recallDRX=%f, precisionDRX=%f, f1DRX=%f" % (recallDRX, precisionDRX, f1DRX))
 			#--------------
 
