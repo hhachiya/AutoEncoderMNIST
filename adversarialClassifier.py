@@ -215,7 +215,7 @@ def decoderR(z,z_dim,reuse=False):
 		convB2 = bias_variable("convB2", [1])
 		output = conv2d_t(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
 
-		output = tf.nn.tanh(output)
+		#output = tf.nn.tanh(output)
 		
 		return output
 #===========================
@@ -278,9 +278,9 @@ decoderR_test = decoderR(encoderR_test, z_dim_R, reuse=True)
 predictFake_train = DNet(decoderR_train)
 predictTrue_train = DNet(xTrue,reuse=True)
 
-#lossR = tf.reduce_mean(tf.square(decoderR_train - xTrue))
+lossR = tf.reduce_mean(tf.square(decoderR_train - xTrue))
 #lossRAll = tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + lambdaR * lossR
-lossR = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=decoderR_train, labels=xTrue))
+#lossR = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=decoderR_train, labels=xTrue))
 lossRAll = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictFake_train, labels=tf.ones_like(predictFake_train))) + lambdaR * lossR
 
 #lossD = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train +  lambdaSmall))
@@ -309,7 +309,7 @@ optimizer = tf.train.AdamOptimizer()
 # 勾配のクリッピング
 gvsR = optimizer.compute_gradients(lossR, var_list=Rvars)
 gvsRAll = optimizer.compute_gradients(lossRAll, var_list=Rvars)
-gvsD = optimizer.compute_gradients(-lossD, var_list=Dvars)
+gvsD = optimizer.compute_gradients(lossD, var_list=Dvars)
 
 capped_gvsR = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvsR if grad is not None]
 capped_gvsRAll = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvsRAll if grad is not None]
