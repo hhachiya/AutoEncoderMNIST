@@ -50,7 +50,7 @@ threFake = 0.5
 threSquaredLoss = 200
 
 # ファイル名のpostFix
-postFix = "_{}_{}_0-1mnist".format(targetChar, trialNo)
+postFix = "_{}_{}_Adam".format(targetChar, trialNo)
 
 # バッチデータ数
 batch_size = 300
@@ -60,8 +60,8 @@ params = {'z_dim_R':z_dim_R, 'testFakeRatios':testFakeRatios, 'labmdaR':lambdaR,
 'threFake':threFake, 'targetChar':targetChar,'batch_size':batch_size}
 
 # ノイズの大きさ
-noiseSigma = 0.155
-
+#noiseSigma = 0.155
+noiseSigma = 1
 
 trainMode = 1
 
@@ -136,14 +136,16 @@ def conv2d_t(inputs, w, b, output_shape, stride):
 	return conv
 	
 # fc layer with ReLU
-def fc_relu(inputs, w, b):
+def fc_relu(inputs, w, b, keepProb=1.0):
 	fc = tf.matmul(inputs, w) + b
+	fc = tf.nn.dropout(fc, keepProb)
 	fc = tf.nn.relu(fc)
 	return fc
 	
 # fc layer with softmax
-def fc_sigmoid(inputs, w, b):
+def fc_sigmoid(inputs, w, b, keepProb=1.0):
 	fc = tf.matmul(inputs, w) + b
+	fc = tf.nn.dropout(fc, keepProb)
 	fc = tf.nn.sigmoid(fc)
 	return fc
 #===========================
@@ -152,7 +154,7 @@ def fc_sigmoid(inputs, w, b):
 # エンコーダ
 # 画像をz_dim次元のベクトルにエンコード
 # reuse=Trueで再利用できる（tf.variable_scope() は，変数の管理に用いるスコープ定義）
-def encoderR(x, z_dim, reuse=False):
+def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 	with tf.variable_scope('encoderR') as scope:
 		if reuse:
 			scope.reuse_variables()
@@ -178,9 +180,9 @@ def encoderR(x, z_dim, reuse=False):
 		# 7 x 7 x 32 -> z-dim
 		fcW1 = weight_variable("fcW1", [conv2size, z_dim])
 		fcB1 = bias_variable("fcB1", [z_dim])
-		fc1 = fc_relu(conv2, fcW1, fcB1)
+		fc1 = fc_relu(conv2, fcW1, fcB1, keepProb)
 		#--------------
-		
+
 		return fc1
 #===========================
 
@@ -188,7 +190,7 @@ def encoderR(x, z_dim, reuse=False):
 # デコーダ
 # z_dim次元の画像にデコード
 # reuse=Trueで再利用できる（tf.variable_scope() は，変数の管理に用いるスコープ定義）
-def decoderR(z,z_dim,reuse=False):
+def decoderR(z,z_dim,reuse=False, keepProb = 1.0):
 	with tf.variable_scope('decoderR') as scope:
 		if reuse:
 			scope.reuse_variables()
@@ -198,8 +200,8 @@ def decoderR(z,z_dim,reuse=False):
 		# 2次元画像を１次元に変更して全結合層へ渡す
 		fcW1 = weight_variable("fcW1", [z_dim, 7*7*32])
 		fcB1 = bias_variable("fcB1", [7*7*32])
-		fc1 = fc_relu(z, fcW1, fcB1)
-		
+		fc1 = fc_relu(z, fcW1, fcB1, keepProb)
+
 		batch_size = tf.shape(fc1)[0]
 		fc1 = tf.reshape(fc1, tf.stack([batch_size, 7, 7, 32]))
 		#--------------
@@ -213,9 +215,8 @@ def decoderR(z,z_dim,reuse=False):
 		# 14 x 2 = 28
 		convW2 = weight_variable("convW2", [3, 3, 1, 32])
 		convB2 = bias_variable("convB2", [1])
-		output = conv2d_t(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
-
-		#output = tf.nn.tanh(output)
+		output = conv2d_t_relu(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
+		#output = conv2d_t_sigmoid(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
 		
 		return output
 #===========================
@@ -224,7 +225,7 @@ def decoderR(z,z_dim,reuse=False):
 # D Network
 # 
 # reuse=Trueで再利用できる（tf.variable_scope() は，変数の管理に用いるスコープ定義）
-def DNet(x, z_dim=1, reuse=False):
+def DNet(x, z_dim=1, reuse=False, keepProb=1.0):
 	with tf.variable_scope('DNet') as scope:
 		if reuse:
 			scope.reuse_variables()
@@ -250,9 +251,9 @@ def DNet(x, z_dim=1, reuse=False):
 		# 7 x 7 x 32 -> z-dim
 		fcW1 = weight_variable("fcW1", [conv2size, z_dim])
 		fcB1 = bias_variable("fcB1", [z_dim])
-		fc1 = fc_sigmoid(conv2, fcW1, fcB1)
+		fc1 = fc_sigmoid(conv2, fcW1, fcB1, keepProb)
 		#--------------
-		
+
 		return fc1
 #===========================
 
@@ -263,31 +264,24 @@ xFake = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 xTest = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 
 # 学習用
-encoderR_train = encoderR(xFake, z_dim_R)
-decoderR_train = decoderR(encoderR_train, z_dim_R)
+encoderR_train = encoderR(xFake, z_dim_R, keepProb=1.0)
+decoderR_train = decoderR(encoderR_train, z_dim_R, keepProb=1.0)
 
 # テスト用
-encoderR_test = encoderR(xTest, z_dim_R, reuse=True)
-decoderR_test = decoderR(encoderR_test, z_dim_R, reuse=True)
+encoderR_test = encoderR(xTest, z_dim_R, reuse=True, keepProb=1.0)
+decoderR_test = decoderR(encoderR_test, z_dim_R, reuse=True, keepProb=1.0)
 #===========================
 
 #===========================
 # 損失関数の設定
 
 #学習用
-predictFake_train = DNet(decoderR_train)
-predictTrue_train = DNet(xTrue,reuse=True)
+predictFake_train = DNet(decoderR_train, keepProb=1.0)
+predictTrue_train = DNet(xTrue,reuse=True, keepProb=1.0)
 
 lossR = tf.reduce_mean(tf.square(decoderR_train - xTrue))
-#lossRAll = tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + lambdaR * lossR
-#lossR = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=decoderR_train, labels=xTrue))
-lossRAll = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictFake_train, labels=tf.ones_like(predictFake_train))) + lambdaR * lossR
-
-#lossD = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train +  lambdaSmall))
-lossDTrue = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictTrue_train, labels=tf.zeros_like(predictTrue_train)))
-lossDFake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictFake_train, labels=tf.ones_like(predictFake_train)))
-lossD = lossDTrue + lossDFake
-
+lossRAll = tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + lambdaR * lossR
+lossD = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train +  lambdaSmall))
 
 # R & Dの変数
 Rvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="encoderR") + tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="decoderR")
@@ -298,7 +292,6 @@ Dvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="DNet")
 tf.set_random_seed(0)
 #--------------
 
-'''
 trainerR = tf.train.AdamOptimizer(1e-3).minimize(lossR, var_list=Rvars)
 trainerRAll = tf.train.AdamOptimizer(1e-3).minimize(lossRAll, var_list=Rvars)
 trainerD = tf.train.AdamOptimizer(1e-3).minimize(-lossD, var_list=Dvars)
@@ -309,7 +302,7 @@ optimizer = tf.train.AdamOptimizer()
 # 勾配のクリッピング
 gvsR = optimizer.compute_gradients(lossR, var_list=Rvars)
 gvsRAll = optimizer.compute_gradients(lossRAll, var_list=Rvars)
-gvsD = optimizer.compute_gradients(lossD, var_list=Dvars)
+gvsD = optimizer.compute_gradients(-lossD, var_list=Dvars)
 
 capped_gvsR = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvsR if grad is not None]
 capped_gvsRAll = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvsRAll if grad is not None]
@@ -318,12 +311,13 @@ capped_gvsD = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvsD if g
 trainerR = optimizer.apply_gradients(capped_gvsR)
 trainerRAll = optimizer.apply_gradients(capped_gvsRAll)
 trainerD = optimizer.apply_gradients(capped_gvsD)
+'''
 #===========================
 
 #===========================
 #テスト用
-predictDX = DNet(xTest,reuse=True)
-predictDRX = DNet(decoderR_test,reuse=True)
+predictDX = DNet(xTest,reuse=True, keepProb=1.0)
+predictDRX = DNet(decoderR_test,reuse=True, keepProb=1.0)
 #===========================
 
 #===========================
@@ -333,8 +327,8 @@ sess.run(tf.global_variables_initializer())
 
 #--------------
 # MNISTのデータの取得
-#myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
-myData = input_data.read_data_sets("MNIST/")
+myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
+#myData = input_data.read_data_sets("MNIST/")
 #--------------
 
 #--------------
@@ -452,52 +446,80 @@ for ite in range(30000):
 			print("\t recallDRX=%f, precisionDRX=%f, f1DRX=%f" % (recallDRX, precisionDRX, f1DRX))
 			#--------------
 
-			#--------------
-			# 画像を保存
-			plt.close()
-			fig, figInds = plt.subplots(nrows=2, ncols=10, sharex=True)
+			if ind == 0:
+				#--------------
+				# 画像を保存
+				plt.close()
+				fig, figInds = plt.subplots(nrows=3, ncols=10, sharex=True)
 	
-			for figInd in np.arange(figInds.shape[1]):
-				fig0 = figInds[0][figInd].imshow(test_x[figInd,:,:,0])
-				fig1 = figInds[1][figInd].imshow(decoderR_test_value[ind][figInd,:,:,0])
+				for figInd in np.arange(figInds.shape[1]):
+					fig0 = figInds[0][figInd].imshow(batch_x[figInd,:,:,0])
+					fig1 = figInds[1][figInd].imshow(batch_x_fake[figInd,:,:,0])
+					fig2 = figInds[2][figInd].imshow(decoderR_train_value[figInd,:,:,0])
 
-				# ticks, axisを隠す
-				fig0.axes.get_xaxis().set_visible(False)
-				fig0.axes.get_yaxis().set_visible(False)
-				fig0.axes.get_xaxis().set_ticks([])
-				fig0.axes.get_yaxis().set_ticks([])
-				fig1.axes.get_xaxis().set_visible(False)
-				fig1.axes.get_yaxis().set_visible(False)
-				fig1.axes.get_xaxis().set_ticks([])
-				fig1.axes.get_yaxis().set_ticks([])
+					# ticks, axisを隠す
+					fig0.axes.get_xaxis().set_visible(False)
+					fig0.axes.get_yaxis().set_visible(False)
+					fig0.axes.get_xaxis().set_ticks([])
+					fig0.axes.get_yaxis().set_ticks([])
+					fig1.axes.get_xaxis().set_visible(False)
+					fig1.axes.get_yaxis().set_visible(False)
+					fig1.axes.get_xaxis().set_ticks([])
+					fig1.axes.get_yaxis().set_ticks([])
+					fig2.axes.get_xaxis().set_visible(False)
+					fig2.axes.get_yaxis().set_visible(False)
+					fig2.axes.get_xaxis().set_ticks([])
+					fig2.axes.get_yaxis().set_ticks([])					
 	
-			path = os.path.join(visualPath,"img{}_{}_{}.png".format(postFix,testFakeRatio,ite))
-			plt.savefig(path)
-			#--------------
-		
-			#--------------
-			# 画像を保存
-			plt.close()
-			fig, figInds = plt.subplots(nrows=2, ncols=10, sharex=True)
-		
-			for figInd in np.arange(figInds.shape[1]):
-				fig0 = figInds[0][figInd].imshow(test_x[-figInd,:,:,0])
-				fig1 = figInds[1][figInd].imshow(decoderR_test_value[ind][-figInd,:,:,0])
+				path = os.path.join(visualPath,"img_train_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
+				plt.savefig(path)
+				#--------------
+							
+				#--------------
+				# 画像を保存
+				plt.close()
+				fig, figInds = plt.subplots(nrows=2, ncols=10, sharex=True)
+	
+				for figInd in np.arange(figInds.shape[1]):
+					fig0 = figInds[0][figInd].imshow(test_x[figInd,:,:,0])
+					fig1 = figInds[1][figInd].imshow(decoderR_test_value[ind][figInd,:,:,0])
 
-				# ticks, axisを隠す
-				fig0.axes.get_xaxis().set_visible(False)
-				fig0.axes.get_yaxis().set_visible(False)
-				fig0.axes.get_xaxis().set_ticks([])
-				fig0.axes.get_yaxis().set_ticks([])
-				fig1.axes.get_xaxis().set_visible(False)
-				fig1.axes.get_yaxis().set_visible(False)
-				fig1.axes.get_xaxis().set_ticks([])
-				fig1.axes.get_yaxis().set_ticks([])
+					# ticks, axisを隠す
+					fig0.axes.get_xaxis().set_visible(False)
+					fig0.axes.get_yaxis().set_visible(False)
+					fig0.axes.get_xaxis().set_ticks([])
+					fig0.axes.get_yaxis().set_ticks([])
+					fig1.axes.get_xaxis().set_visible(False)
+					fig1.axes.get_yaxis().set_visible(False)
+					fig1.axes.get_xaxis().set_ticks([])
+					fig1.axes.get_yaxis().set_ticks([])
 	
-			path = os.path.join(visualPath,"img_fake_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
-			plt.savefig(path)
-			#--------------
-		#--------------
+				path = os.path.join(visualPath,"img_test_true_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
+				plt.savefig(path)
+				#--------------
+		
+				#--------------
+				# 画像を保存
+				plt.close()
+				fig, figInds = plt.subplots(nrows=2, ncols=10, sharex=True)
+		
+				for figInd in np.arange(figInds.shape[1]):
+					fig0 = figInds[0][figInd].imshow(test_x[-figInd,:,:,0])
+					fig1 = figInds[1][figInd].imshow(decoderR_test_value[ind][-figInd,:,:,0])
+
+					# ticks, axisを隠す
+					fig0.axes.get_xaxis().set_visible(False)
+					fig0.axes.get_yaxis().set_visible(False)
+					fig0.axes.get_xaxis().set_ticks([])
+					fig0.axes.get_yaxis().set_ticks([])
+					fig1.axes.get_xaxis().set_visible(False)
+					fig1.axes.get_yaxis().set_visible(False)
+					fig1.axes.get_xaxis().set_ticks([])
+					fig1.axes.get_yaxis().set_ticks([])
+	
+				path = os.path.join(visualPath,"img_test_fake_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
+				plt.savefig(path)
+				#--------------
 		
 		#--------------
 		# チェックポイントの保存
