@@ -53,15 +53,15 @@ threSquaredLoss = 200
 postFix = "_{}_{}_Adam".format(targetChar, trialNo)
 
 # バッチデータ数
-batch_size = 300
+batchSize = 300
 
 # 変数をまとめたディクショナリ
 params = {'z_dim_R':z_dim_R, 'testFakeRatios':testFakeRatios, 'labmdaR':lambdaR,
-'threFake':threFake, 'targetChar':targetChar,'batch_size':batch_size}
+'threFake':threFake, 'targetChar':targetChar,'batchSize':batchSize}
 
 # ノイズの大きさ
 #noiseSigma = 0.155
-noiseSigma = 1
+noiseSigma = 40
 
 trainMode = 1
 
@@ -202,21 +202,21 @@ def decoderR(z,z_dim,reuse=False, keepProb = 1.0):
 		fcB1 = bias_variable("fcB1", [7*7*32])
 		fc1 = fc_relu(z, fcW1, fcB1, keepProb)
 
-		batch_size = tf.shape(fc1)[0]
-		fc1 = tf.reshape(fc1, tf.stack([batch_size, 7, 7, 32]))
+		batchSize = tf.shape(fc1)[0]
+		fc1 = tf.reshape(fc1, tf.stack([batchSize, 7, 7, 32]))
 		#--------------
 		
 		# padding='SAME'のとき、出力のサイズO = 入力サイズI/ストライドS
 		# 7 x 2 = 14
 		convW1 = weight_variable("convW1", [3, 3, 32, 32])
 		convB1 = bias_variable("convB1", [32])
-		conv1 = conv2d_t_relu(fc1, convW1, convB1, output_shape=[batch_size,14,14,32], stride=[1,2,2,1])
+		conv1 = conv2d_t_relu(fc1, convW1, convB1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
 		
 		# 14 x 2 = 28
 		convW2 = weight_variable("convW2", [3, 3, 1, 32])
 		convB2 = bias_variable("convB2", [1])
-		output = conv2d_t_relu(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
-		#output = conv2d_t_sigmoid(conv1, convW2, convB2, output_shape=[batch_size,28,28,1], stride=[1,2,2,1])
+		output = conv2d_t_relu(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
+		#output = conv2d_t_sigmoid(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
 		
 		return output
 #===========================
@@ -295,8 +295,8 @@ tf.set_random_seed(0)
 trainerR = tf.train.AdamOptimizer(1e-3).minimize(lossR, var_list=Rvars)
 trainerRAll = tf.train.AdamOptimizer(1e-3).minimize(lossRAll, var_list=Rvars)
 trainerD = tf.train.AdamOptimizer(1e-3).minimize(-lossD, var_list=Dvars)
-'''
 
+'''
 optimizer = tf.train.AdamOptimizer()
 
 # 勾配のクリッピング
@@ -329,6 +329,10 @@ sess.run(tf.global_variables_initializer())
 # MNISTのデータの取得
 myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
 #myData = input_data.read_data_sets("MNIST/")
+
+targetTrainInds = np.where(myData.train.labels == targetChar)[0]
+targetTrainData = myData.train.images[myData.train.labels == targetChar]
+batchNum = len(targetTrainInds)//batchSize
 #--------------
 
 #--------------
@@ -357,16 +361,25 @@ lossD_values = []
 #--------------
 
 
+batchInd = 0
 for ite in range(30000):
 	
 	#--------------
 	# 学習データの作成
-	batch = myData.train.next_batch(batch_size)
-	batch_x_all = np.reshape(batch[0],(batch_size,28,28,1))
+	if batchInd == batchNum-1:
+		batchInd = 0
+
+	#batch = myData.train.next_batch(batchSize)
+	#batch_x_all = np.reshape(batch[0],(batchSize,28,28,1))
 
 	# targetCharのみのデータ
-	targetTrainInds = np.where(batch[1] == targetChar)[0]
-	batch_x = batch_x_all[targetTrainInds]
+	#targetTrainInds = np.where(batch[1] == targetChar)[0]
+	#batch_x = batch_x_all[targetTrainInds]
+
+	batch = targetTrainData[batchInd*batchSize:(batchInd+1)*batchSize]
+	batch_x = np.reshape(batch,(batchSize,28,28,1))
+
+	batchInd += 1
 	
 	# ノイズを追加する(ガウシアンノイズ)
 	# 正規分布に従う乱数を出力

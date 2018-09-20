@@ -40,8 +40,8 @@ visualPath = 'visualization'
 modelPath = 'models'
 logPath = 'logs'
 
-#postFixStr = '_Adam'
-postFixStr = ''
+postFixStr = '_Adam'
+#postFixStr = ''
 #===========================
 
 #===========================
@@ -71,7 +71,7 @@ def loadParams(path):
 		lossD_values = pickle.load(fp)
 		params = pickle.load(fp)	
 
-		return recallDXs, precisionDXs, f1DXs, lossR_values, lossRAll_values, lossD_values
+		return recallDXs, precisionDXs, f1DXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value
 
 recallDXs = [[] for tmp in targetChars]
 precisionDXs = [[] for tmp in targetChars]
@@ -90,8 +90,12 @@ for targetChar in targetChars:
 		# pickleから読み込み
 		path = os.path.join(logPath,"log{}.pickle".format(postFix))
 
-		recallDXs_, precisionDXs_, f1DXs_, lossR_values_, lossRAll_values_, lossD_values_ = loadParams(path)
+		recallDXs_, precisionDXs_, f1DXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_ = loadParams(path)
 		#--------------
+
+
+		encoderR_train_value_
+		pdb.set_trace()
 
 		#--------------
 		# 記録
