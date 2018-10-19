@@ -28,7 +28,7 @@ threFake = 0.5
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
-trialNos = [1,2,3]
+trialNos = [1,2]
 
 # Rの二乗誤差の閾値
 threSquaredLoss = 200
@@ -40,7 +40,14 @@ visualPath = 'visualization'
 modelPath = 'models'
 logPath = 'logs'
 
-postFixStr = '_Adam'
+#postFixStr = '_AdamAugOver3_noNoise'
+#postFixStr = '_AdamAugOver2_noNoise'
+postFixStr = '_AdamAugOver1_noNoise'
+#postFixStr = '_AdamAugOver3'
+#postFixStr = '_AdamAugOver'
+#postFixStr = '_AdamAug_noMMD'
+#postFixStr = '_AdamAug'
+#postFixStr = '_Adam'
 #postFixStr = ''
 #===========================
 
@@ -71,11 +78,14 @@ def loadParams(path):
 		lossD_values = pickle.load(fp)
 		params = pickle.load(fp)	
 
-		return recallDXs, precisionDXs, f1DXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value
+		return recallDXs, precisionDXs, f1DXs, recallDRXs, precisionDRXs, f1DRXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value
 
 recallDXs = [[] for tmp in targetChars]
 precisionDXs = [[] for tmp in targetChars]
 f1DXs = [[] for tmp in targetChars]
+recallDRXs = [[] for tmp in targetChars]
+precisionDRXs = [[] for tmp in targetChars]
+f1DRXs = [[] for tmp in targetChars]
 lossR_values = [[] for tmp in targetChars]
 lossRAll_values = [[] for tmp in targetChars]
 lossD_values = [[] for tmp in targetChars]
@@ -90,18 +100,18 @@ for targetChar in targetChars:
 		# pickleから読み込み
 		path = os.path.join(logPath,"log{}.pickle".format(postFix))
 
-		recallDXs_, precisionDXs_, f1DXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_ = loadParams(path)
+		recallDXs_, precisionDXs_, f1DXs_, recallDRXs_, precisionDRXs_, f1DRXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_ = loadParams(path)
 		#--------------
 
-
-		encoderR_train_value_
-		pdb.set_trace()
 
 		#--------------
 		# 記録
 		recallDXs[targetChar].append(recallDXs_)	
 		precisionDXs[targetChar].append(precisionDXs_)
 		f1DXs[targetChar].append(f1DXs_)
+		recallDRXs[targetChar].append(recallDRXs_)	
+		precisionDRXs[targetChar].append(precisionDRXs_)
+		f1DRXs[targetChar].append(f1DRXs_)
 		lossR_values[targetChar].append(lossR_values_)
 		lossRAll_values[targetChar].append(lossRAll_values_)
 		lossD_values[targetChar].append(lossD_values_)
@@ -116,23 +126,39 @@ for targetChar in targetChars:
 recalls = [[] for tmp in np.arange(len(targetChars))]
 precisions = [[] for tmp in np.arange(len(targetChars))]
 f1s = [[] for tmp in np.arange(len(targetChars))]
+recallsR = [[] for tmp in np.arange(len(targetChars))]
+precisionsR = [[] for tmp in np.arange(len(targetChars))]
+f1sR = [[] for tmp in np.arange(len(targetChars))]
 
 for targetChar in targetChars:
 
 	recalls_ = np.array(recallDXs[targetChar][maxInds[targetChar]])[:,-1]
 	precisions_ = np.array(precisionDXs[targetChar][maxInds[targetChar]])[:,-1]
 	f1s_ = np.array(f1DXs[targetChar][maxInds[targetChar]])[:,-1]
+	recallsR_ = np.array(recallDRXs[targetChar][maxInds[targetChar]])[:,-1]
+	precisionsR_ = np.array(precisionDRXs[targetChar][maxInds[targetChar]])[:,-1]
+	f1sR_ = np.array(f1DRXs[targetChar][maxInds[targetChar]])[:,-1]
 
 	recalls[targetChar] = recalls_
 	precisions[targetChar] = precisions_
 	f1s[targetChar] = f1s_
+	recallsR[targetChar] = recallsR_
+	precisionsR[targetChar] = precisionsR_
+	f1sR[targetChar] = f1sR_
 
 recall_mean = np.mean(np.array(recalls),axis=0)
 precision_mean = np.mean(np.array(precisions),axis=0)
 f1_mean = np.mean(np.array(f1s),axis=0)
+recall_meanR = np.mean(np.array(recallsR),axis=0)
+precision_meanR = np.mean(np.array(precisionsR),axis=0)
+f1_meanR = np.mean(np.array(f1sR),axis=0)
 
 print(recall_mean)
 print(precision_mean)
 print(f1_mean)
+print('--------------')
+print(recall_meanR)
+print(precision_meanR)
+print(f1_meanR)
 
 pdb.set_trace()
