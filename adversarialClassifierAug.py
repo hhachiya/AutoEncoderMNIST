@@ -61,7 +61,7 @@ testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 threFake = 0.5
 
 # Rの誤差の閾値
-threLossR = 50
+threLossR = 100
 
 # Dの誤差の閾値
 threLossD = -10e-8
@@ -460,6 +460,7 @@ while not isStop:
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 											[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 											feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+		lossD_value = -1
 
 		if isTrainingD:
 			# training D network with batch_x & batch_x_fake
@@ -473,7 +474,7 @@ while not isStop:
 		#									feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
 
-		if lossR_value < threLossR:
+		if (lossR_value < threLossR) & (ite > nIte):
 			print("stopped training")
 			isStop = True
 	#==============
