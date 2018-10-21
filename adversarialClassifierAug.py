@@ -404,7 +404,7 @@ targetTestInds = np.where(myData.test.labels == targetChar)[0]
 # Trueのindex（シャッフル）
 targetTestIndsShuffle = targetTestInds[np.random.permutation(len(targetTestInds))]
 
-# Fakeのindex（シャッフル）
+# Fakeのindex
 fakeTestInds = np.setdiff1d(np.arange(len(myData.test.labels)),targetTestInds)
 #--------------
 
@@ -561,10 +561,12 @@ while not isStop:
 			targetNum = len(targetTestInds) - fakeNum
 			
 			# Trueのindex
-			targetTestIndsSelected = targetTestIndsShuffle[:targetNum]
+			#targetTestIndsSelected = targetTestIndsShuffle[:targetNum]
+			targetTestIndsSelected = targetTestInds[:targetNum]
 
 			# Fakeのindex
-			fakeTestIndsSelected = fakeTestInds[np.random.permutation(len(fakeTestInds))[:fakeNum]]
+			#fakeTestIndsSelected = fakeTestInds[np.random.permutation(len(fakeTestInds))[:fakeNum]]
+			fakeTestIndsSelected = fakeTestInds[:fakeNum]
 
 			# reshape & concat
 			test_x = np.reshape(myData.test.images[targetTestIndsSelected],(len(targetTestIndsSelected),28,28,1))
