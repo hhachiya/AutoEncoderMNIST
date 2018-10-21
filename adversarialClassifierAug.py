@@ -19,7 +19,7 @@ np.random.seed(0)
 
 #===========================
 # パラメータの設定
-z_dim_R = 100
+z_dim_R = 200
 #z_dim_R = 2
 
 # 学習モード
@@ -27,7 +27,6 @@ ALOCC = 0
 ALDAD = 1
 isStop = False
 isEmbedSampling = False
-isTrainingD = False
 
 if len(sys.argv) > 1:
 	# 文字の種類
@@ -61,7 +60,7 @@ testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 threFake = 0.5
 
 # Rの誤差の閾値
-threLossR = 100
+threLossR = 50
 
 # Dの誤差の閾値
 threLossD = -10e-8
@@ -95,7 +94,7 @@ elif trainMode == ALDAD:
 	postFix = "_ALDAD_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
 
 # 反復回数
-nIte = 5000
+nIte = 20000
 
 visualPath = 'visualization'
 modelPath = 'models'
@@ -109,10 +108,13 @@ def calcEval(predict, gt, threFake=0.5):
 	predict[predict < threFake] = 0.
 
 	recall = np.sum(predict[gt==1])/np.sum(gt==1)
+	recallNeg = np.sum(predict[gt==0]==0)/np.sum(gt==0)
 	precision = np.sum(predict[gt==1])/np.sum(predict==1)
+	precisionNeg = np.sum(predict[gt==0]==0)/np.sum(predict==0)
 	f1 = 2 * (precision * recall)/(precision + recall)
+	f1Neg = 2 * (precisionNeg * recallNeg)/(precisionNeg + recallNeg)
 
-	return recall, precision, f1
+	return recall, precision, f1, recallNeg, precisionNeg, f1Neg
 #===========================
 
 #===========================
@@ -198,8 +200,8 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 		conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
 		
 		# 14/2 = 7
-		convW2 = weight_variable("convW2", [3, 3, 32, 32])
-		convB2 = bias_variable("convB2", [32])
+		convW2 = weight_variable("convW2", [3, 3, 32, 64])
+		convB2 = bias_variable("convB2", [64])
 		conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
 
 		#--------------
@@ -231,17 +233,17 @@ def decoderR(z,z_dim,reuse=False, keepProb = 1.0):
 		#--------------
 		# embeddingベクトルを特徴マップに変換
 		# 2次元画像を１次元に変更して全結合層へ渡す
-		fcW1 = weight_variable("fcW1", [z_dim, 7*7*32])
-		fcB1 = bias_variable("fcB1", [7*7*32])
+		fcW1 = weight_variable("fcW1", [z_dim, 7*7*64])
+		fcB1 = bias_variable("fcB1", [7*7*64])
 		fc1 = fc_relu(z, fcW1, fcB1, keepProb)
 
 		batchSize = tf.shape(fc1)[0]
-		fc1 = tf.reshape(fc1, tf.stack([batchSize, 7, 7, 32]))
+		fc1 = tf.reshape(fc1, tf.stack([batchSize, 7, 7, 64]))
 		#--------------
 		
 		# padding='SAME'のとき、出力のサイズO = 入力サイズI/ストライドS
 		# 7 x 2 = 14
-		convW1 = weight_variable("convW1", [3, 3, 32, 32])
+		convW1 = weight_variable("convW1", [3, 3, 32, 64])
 		convB1 = bias_variable("convB1", [32])
 		conv1 = conv2d_t_relu(fc1, convW1, convB1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
 		
@@ -414,6 +416,12 @@ f1DXs = [[] for tmp in np.arange(len(testFakeRatios))]
 recallDRXs = [[] for tmp in np.arange(len(testFakeRatios))]
 precisionDRXs = [[] for tmp in np.arange(len(testFakeRatios))]
 f1DRXs = [[] for tmp in np.arange(len(testFakeRatios))]
+recallDXsNeg = [[] for tmp in np.arange(len(testFakeRatios))]
+precisionDXsNeg = [[] for tmp in np.arange(len(testFakeRatios))]
+f1DXsNeg = [[] for tmp in np.arange(len(testFakeRatios))]
+recallDRXsNeg = [[] for tmp in np.arange(len(testFakeRatios))]
+precisionDRXsNeg = [[] for tmp in np.arange(len(testFakeRatios))]
+f1DRXsNeg = [[] for tmp in np.arange(len(testFakeRatios))]
 
 lossR_values = []
 lossRAll_values = []
@@ -453,8 +461,11 @@ while not isStop:
 	# ALOCC(Adversarially Learned One-Class Classifier)の学習
 	if trainMode == ALOCC:
 
-		if ite == 2000:
-			isTrainingD = True
+		#if ite == 2000:
+		#	isTrainingD = True
+
+		if ite >= nIte:
+			isStop = True
 
 		# training R network with batch_x & batch_x_fake
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
@@ -462,21 +473,20 @@ while not isStop:
 											feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 		lossD_value = -1
 
-		if isTrainingD:
-			# training D network with batch_x & batch_x_fake
-			_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
+		# training D network with batch_x & batch_x_fake
+		_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 											[trainerD, lossD, predictFake_train, predictTrue_train],
 											feed_dict={xTrue: batch_x,xFake: batch_x_fake})
 
 		# Re-training R network with batch_x & batch_x_fake
-		#_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
-		#									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
-		#									feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+											[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+											feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
 
-		if (lossR_value < threLossR) & (ite > nIte):
-			print("stopped training")
-			isStop = True
+		#if (lossR_value < threLossR) & (ite > nIte):
+		#	print("stopped training")
+		#	isStop = True
 	#==============
 
 	#==============
@@ -494,13 +504,11 @@ while not isStop:
 										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
-		'''	
 		# training D with batch_x
 		if not isEmbedSampling:
 			_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 										[trainerD, lossD, predictFake_train, predictTrue_train],
 										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
-		'''
 
 		lossD_value = -1
 
@@ -521,11 +529,10 @@ while not isStop:
 
 			_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run([trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
 
-	# もし誤差が下がらない場合はやり直し
-	if (ite == 3000) & (lossD_value < -10):
-		isTrainedD = False
-		isEmbedSampling = False
-			
+	# もし誤差が下がらない場合は終了
+	if (ite > 2000) & (lossD_value < -10):
+		isStop = True
+		
 			
 	#==============
 
@@ -572,8 +579,8 @@ while not isStop:
 													
 			#--------------
 			# 評価値の計算と記録
-			recallDX, precisionDX, f1DX = calcEval(predictDX_value[ind][:,0], test_y, threFake)
-			recallDRX, precisionDRX, f1DRX = calcEval(predictDRX_value[ind][:,0], test_y, threFake)
+			recallDX, precisionDX, f1DX, recallDXNeg, precisionDXNeg, f1DXNeg = calcEval(predictDX_value[ind][:,0], test_y, threFake)
+			recallDRX, precisionDRX, f1DRX, recallDRXNeg, precisionDRXNeg, f1DRXNeg = calcEval(predictDRX_value[ind][:,0], test_y, threFake)
 		
 			recallDXs[ind].append(recallDX)
 			precisionDXs[ind].append(precisionDX)
@@ -582,12 +589,22 @@ while not isStop:
 			recallDRXs[ind].append(recallDRX)
 			precisionDRXs[ind].append(precisionDRX)
 			f1DRXs[ind].append(f1DRX)
+
+			recallDXsNeg[ind].append(recallDXNeg)
+			precisionDXsNeg[ind].append(precisionDXNeg)
+			f1DXsNeg[ind].append(f1DXNeg)
+		
+			recallDRXsNeg[ind].append(recallDRXNeg)
+			precisionDRXsNeg[ind].append(precisionDRXNeg)
+			f1DRXsNeg[ind].append(f1DRXNeg)
 			#--------------
 
 			#--------------
 			print("ratio:%f" % (testFakeRatio))
 			print("recallDX=%f, precisionDX=%f, f1DX=%f" % (recallDX, precisionDX, f1DX))
 			print("recallDRX=%f, precisionDRX=%f, f1DRX=%f" % (recallDRX, precisionDRX, f1DRX))
+			print("recallDXNeg=%f, precisionDXNeg=%f, f1DXNeg=%f" % (recallDXNeg, precisionDXNeg, f1DXNeg))
+			print("recallDRXNeg=%f, precisionDRXNeg=%f, f1DRXNeg=%f" % (recallDRXNeg, precisionDRXNeg, f1DRXNeg))
 			#--------------
 
 			def plotImg(x,y,path):
@@ -695,6 +712,12 @@ with open(path, "wb") as fp:
 	pickle.dump(lossRAll_values,fp)
 	pickle.dump(lossD_values,fp)
 	pickle.dump(params,fp)
+	pickle.dump(recallDXsNeg,fp)
+	pickle.dump(precisionDXsNeg,fp)
+	pickle.dump(f1DXsNeg,fp)
+	pickle.dump(recallDRXsNeg,fp)
+	pickle.dump(precisionDRXsNeg,fp)
+	pickle.dump(f1DRXsNeg,fp)	
 
 	if isEmbedSampling:
 		pickle.dump(decoderR_train_aug_value,fp)
