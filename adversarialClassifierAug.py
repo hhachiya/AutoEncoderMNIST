@@ -664,7 +664,7 @@ while not isStop:
 
 				#--------------
 				# 提案法で生成した画像（元の画像、提案法で生成たい異常画像）を保存
-				if isEmbedSampling:
+				if isEmbedSampling & (trainMode == ALDAD):
 					path = os.path.join(visualPath,"img_train_aug_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
 					plotImg(batch_x[:nPlotImg], decoderR_train_aug_value[:nPlotImg],path)
 				#--------------
@@ -719,7 +719,7 @@ with open(path, "wb") as fp:
 	pickle.dump(precisionDRXsNeg,fp)
 	pickle.dump(f1DRXsNeg,fp)	
 
-	if isEmbedSampling:
+	if trainMode == ALDAD:
 		pickle.dump(decoderR_train_aug_value,fp)
 #--------------
 #===========================
