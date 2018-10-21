@@ -40,15 +40,13 @@ visualPath = 'visualization'
 modelPath = 'models'
 logPath = 'logs'
 
-#postFixStr = '_AdamAugOver3_noNoise'
-#postFixStr = '_AdamAugOver2_noNoise'
-postFixStr = '_AdamAugOver1_noNoise'
-#postFixStr = '_AdamAugOver3'
-#postFixStr = '_AdamAugOver'
-#postFixStr = '_AdamAug_noMMD'
-#postFixStr = '_AdamAug'
-#postFixStr = '_Adam'
+noiseSigmaEmbed = 3
+noiseSigma = 0
+
+postFixStr = 'ALDAD'
+#postFixStr = 'ALOCC'
 #postFixStr = ''
+
 #===========================
 
 #===========================
@@ -94,7 +92,8 @@ maxInds = [[] for tmp in targetChars]
 for targetChar in targetChars:
 	for trialNo in trialNos:
 		# ファイル名のpostFix
-		postFix = "_{}_{}{}".format(targetChar, trialNo,postFixStr)
+		#postFix = "_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma)
+		postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
 
 		#--------------
 		# pickleから読み込み
@@ -120,6 +119,7 @@ for targetChar in targetChars:
 	#--------------
 	# 最大のlossDに対応するF1 score 
 	maxInds[targetChar] = np.argmax(np.array(lossD_values[targetChar])[:,-1])
+	#maxInds[targetChar] = np.argmax(np.array(f1DRXs[targetChar])[:,-1,-1])
 	#--------------
 #===========================
 

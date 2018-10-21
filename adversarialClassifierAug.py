@@ -25,30 +25,34 @@ z_dim_R = 100
 # 学習モード
 ALOCC = 0
 ALDAD = 1
-isRtrain = True
+isStop = False
 isEmbedSampling = False
+isTrainingD = False
 
 if len(sys.argv) > 1:
 	# 文字の種類
-	targetChar = int(sys.argv[1])
+	trainMode = int(sys.argv[1])
 
 	# trail no.
 	if len(sys.argv) > 2:
-		trialNo = int(sys.argv[2])
-		trainMode = int(sys.argv[3])
+		targetChar = int(sys.argv[2])
+		trialNo = int(sys.argv[3])
+		noiseSigma = int(sys.argv[4])
 	else:
-		trialNo = 1	
-		trainMode = ALDAD
+		targetChar = 0
+		trialNo = 0	
+		noiseSigma = 40
 
 else:
-	# 文字の種類
-	targetChar = 0
+	# 方式の種類
+	trainMode = ALDAD
 
 # Rの二乗誤差の重み係数
 lambdaR = 0.4
 
 # log(0)と0割防止用
-lambdaSmall = 0.00001
+lambdaSmall = 10e-8
+#lambdaSmall = 0.00001
 
 # テストデータにおける偽物の割合
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
@@ -56,11 +60,14 @@ testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 # 予測結果に対する閾値
 threFake = 0.5
 
-# Rの二乗誤差の閾値
-threSquaredLoss = 200
+# Rの誤差の閾値
+threLossR = 50
+
+# Dの誤差の閾値
+threLossD = -10e-8
 
 # データ拡張のパラメータ
-clusterNum = 3
+clusterNum = 5
 augNum = 100
 
 # バッチデータ数
@@ -72,10 +79,11 @@ params = {'z_dim_R':z_dim_R, 'testFakeRatios':testFakeRatios, 'labmdaR':lambdaR,
 
 # ノイズの大きさ
 #noiseSigma = 0.155
-noiseSigma = 40
+#noiseSigma = 100
+#noiseSigma = 40
 
 # embedded spaceにおけるノイズのレベル
-noiseSigmaEmbed = 1
+noiseSigmaEmbed = 3
 
 # プロットする画像数
 nPlotImg = 10
@@ -84,11 +92,10 @@ nPlotImg = 10
 if trainMode == ALOCC:
 	postFix = "_ALOCC_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma)
 elif trainMode == ALDAD:
-	postFix = "_ALDAD_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigmaEmbed)
+	postFix = "_ALDAD_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
 
 # 反復回数
 nIte = 5000
-
 
 visualPath = 'visualization'
 modelPath = 'models'
@@ -415,8 +422,11 @@ lossD_values = []
 
 
 batchInd = 0
-for ite in range(nIte):
-	
+ite = 0
+#for ite in range(nIte):
+while not isStop:
+
+	ite = ite + 1	
 	#--------------
 	# 学習データの作成
 	if batchInd == batchNum-1:
@@ -443,19 +453,29 @@ for ite in range(nIte):
 	# ALOCC(Adversarially Learned One-Class Classifier)の学習
 	if trainMode == ALOCC:
 
+		if ite == 2000:
+			isTrainingD = True
+
 		# training R network with batch_x & batch_x_fake
-		if isRtrain: 
-			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 											[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 											feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
-		# training D network with batch_x & batch_x_fake
-		_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
+		if isTrainingD:
+			# training D network with batch_x & batch_x_fake
+			_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 											[trainerD, lossD, predictFake_train, predictTrue_train],
 											feed_dict={xTrue: batch_x,xFake: batch_x_fake})
 
-		if isTrain & lossR_value < threSquaredLoss:
-			isRTrain = False
+		# Re-training R network with batch_x & batch_x_fake
+		#_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+		#									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+		#									feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+
+
+		if lossR_value < threLossR:
+			print("stopped training")
+			isStop = True
 	#==============
 
 	#==============
@@ -464,18 +484,26 @@ for ite in range(nIte):
 		if ite == 2000:
 			isEmbedSampling = True
 
+		if ite >= nIte:
+			isStop = True
+
+
 		# training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
-										feed_dict={xTrue: batch_x, xFake: batch_x})
-	
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+
+		'''	
 		# training D with batch_x
 		if not isEmbedSampling:
 			_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 										[trainerD, lossD, predictFake_train, predictTrue_train],
-										feed_dict={xTrue: batch_x, xFake: batch_x})
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+		'''
 
-		if isEMbedSampling:
+		lossD_value = -1
+
+		if isEmbedSampling:
 			#------------
 			# clustering samples in embeded space, z
 			kmeans = KMeans(n_clusters=clusterNum, random_state=0).fit(encoderR_train_value)
@@ -491,6 +519,13 @@ for ite in range(nIte):
 			#------------
 
 			_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run([trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
+
+	# もし誤差が下がらない場合はやり直し
+	if (ite == 3000) & (lossD_value < -10):
+		isTrainedD = False
+		isEmbedSampling = False
+			
+			
 	#==============
 
 	# 損失の記録
@@ -504,7 +539,7 @@ for ite in range(nIte):
 
 	#--------------
 	# テスト
-	if ite % 1000 == 0:
+	if (ite % 1000 == 0) | isStop:
 	
 		
 		predictDX_value = [[] for tmp in np.arange(len(testFakeRatios))]
@@ -549,8 +584,9 @@ for ite in range(nIte):
 			#--------------
 
 			#--------------
-			print("ratio:%f \t recallDX=%f, precisionDX=%f, f1DX=%f" % (testFakeRatio, recallDX, precisionDX, f1DX))
-			print("\t recallDRX=%f, precisionDRX=%f, f1DRX=%f" % (recallDRX, precisionDRX, f1DRX))
+			print("ratio:%f" % (testFakeRatio))
+			print("recallDX=%f, precisionDX=%f, f1DX=%f" % (recallDX, precisionDX, f1DX))
+			print("recallDRX=%f, precisionDRX=%f, f1DRX=%f" % (recallDRX, precisionDRX, f1DRX))
 			#--------------
 
 			def plotImg(x,y,path):
@@ -610,7 +646,7 @@ for ite in range(nIte):
 
 				#--------------
 				# 提案法で生成した画像（元の画像、提案法で生成たい異常画像）を保存
-				if isEMbedSampling:
+				if isEmbedSampling:
 					path = os.path.join(visualPath,"img_train_aug_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
 					plotImg(batch_x[:nPlotImg], decoderR_train_aug_value[:nPlotImg],path)
 				#--------------
@@ -659,7 +695,7 @@ with open(path, "wb") as fp:
 	pickle.dump(lossD_values,fp)
 	pickle.dump(params,fp)
 
-	if isEMbedSampling:
+	if isEmbedSampling:
 		pickle.dump(decoderR_train_aug_value,fp)
 #--------------
 #===========================
