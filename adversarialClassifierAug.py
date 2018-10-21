@@ -19,7 +19,7 @@ np.random.seed(0)
 
 #===========================
 # パラメータの設定
-z_dim_R = 200
+z_dim_R = 100
 #z_dim_R = 2
 
 # 学習モード
@@ -94,7 +94,7 @@ elif trainMode == ALDAD:
 	postFix = "_ALDAD_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
 
 # 反復回数
-nIte = 20000
+nIte = 5000
 
 visualPath = 'visualization'
 modelPath = 'models'

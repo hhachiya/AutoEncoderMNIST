@@ -11,7 +11,7 @@ import sys
 
 #===========================
 # パラメータの設定
-z_dim_R = 100
+z_dim_R = 200
 
 targetChars = [0,1,2,3,4,5,6,7,8,9]
 
@@ -28,7 +28,7 @@ threFake = 0.5
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
-trialNos = [0,1]
+trialNos = [0]
 
 # Rの二乗誤差の閾値
 threSquaredLoss = 200
@@ -41,7 +41,7 @@ modelPath = 'models'
 logPath = 'logs'
 
 noiseSigmaEmbed = 3
-noiseSigma = 100
+noiseSigma = 0
 
 postFixStr = 'ALDAD'
 #postFixStr = 'ALOCC'
