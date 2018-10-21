@@ -28,7 +28,7 @@ threFake = 0.5
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
-trialNos = [1,2]
+trialNos = [0,1]
 
 # Rの二乗誤差の閾値
 threSquaredLoss = 200
@@ -41,7 +41,7 @@ modelPath = 'models'
 logPath = 'logs'
 
 noiseSigmaEmbed = 3
-noiseSigma = 0
+noiseSigma = 100
 
 postFixStr = 'ALDAD'
 #postFixStr = 'ALOCC'

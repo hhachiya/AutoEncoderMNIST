@@ -26,7 +26,7 @@ z_dim_R = 200
 ALOCC = 0
 ALDAD = 1
 isStop = False
-isEmbedSampling = False
+isEmbedSampling = True
 
 if len(sys.argv) > 1:
 	# 文字の種類
@@ -471,8 +471,6 @@ while not isStop:
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 											[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 											feed_dict={xTrue: batch_x, xFake: batch_x_fake})
-		lossD_value = -1
-
 		# training D network with batch_x & batch_x_fake
 		_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 											[trainerD, lossD, predictFake_train, predictTrue_train],
@@ -492,8 +490,8 @@ while not isStop:
 	#==============
 	# ALDAD(Adversarially Learned Discriminative Abnormal Detector)の学習
 	elif trainMode == ALDAD:
-		if ite == 2000:
-			isEmbedSampling = True
+		#if ite == 2000:
+		#	isEmbedSampling = True
 
 		if ite >= nIte:
 			isStop = True
@@ -504,13 +502,13 @@ while not isStop:
 										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
+		'''
 		# training D with batch_x
 		if not isEmbedSampling:
 			_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 										[trainerD, lossD, predictFake_train, predictTrue_train],
 										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
-
-		lossD_value = -1
+		'''
 
 		if isEmbedSampling:
 			#------------
