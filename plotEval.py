@@ -11,7 +11,7 @@ import sys
 
 #===========================
 # パラメータの設定
-z_dim_R = 200
+z_dim_R = 100
 
 targetChars = [0,1,2,3,4,5,6,7,8,9]
 
@@ -28,7 +28,9 @@ threFake = 0.5
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
-trialNos = [0]
+trialNos = [0,1,2]
+
+nIte = 5000
 
 # Rの二乗誤差の閾値
 threSquaredLoss = 200
@@ -41,7 +43,7 @@ modelPath = 'models'
 logPath = 'logs'
 
 noiseSigmaEmbed = 3
-noiseSigma = 0
+noiseSigma = 50
 
 postFixStr = 'ALDAD'
 #postFixStr = 'ALOCC'
@@ -118,8 +120,10 @@ for targetChar in targetChars:
 
 	#--------------
 	# 最大のlossDに対応するF1 score 
-	maxInds[targetChar] = np.argmax(np.array(lossD_values[targetChar])[:,-1])
-	#maxInds[targetChar] = np.argmax(np.array(f1DRXs[targetChar])[:,-1,-1])
+	#maxInds[targetChar] = np.argmax(np.array(lossD_values[targetChar])[:,-1])
+	lossD_tmp = np.array([np.ones([nIte])*lossD_values[targetChar][i][0] if len(lossD_values[targetChar][i]) < nIte else lossD_values[targetChar][i] for i in trialNos])
+	#maxInds[targetChar] = np.argmax(lossD_tmp[:,-1])
+	maxInds[targetChar] = np.argmax(np.array(f1DXs[targetChar])[:,-1,-1])
 	#--------------
 #===========================
 
