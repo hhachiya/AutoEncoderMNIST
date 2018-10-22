@@ -11,9 +11,10 @@ import sys
 
 #===========================
 # パラメータの設定
-z_dim_R = 100
+z_dim_R = 200
 
-targetChars = [0,1,2,3,4,5,6,7,8,9]
+#targetChars = [0,1,2,3,4,5,6,7,8,9]
+targetChars = [0,1,2,3,4,5,6,7]
 
 # Rの二乗誤差の重み係数
 lambdaR = 0.4
@@ -28,9 +29,12 @@ threFake = 0.5
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
-trialNos = [0,1,2]
+#trialNos = [0,1,2]
+trialNos = [0]
 
 nIte = 5000
+resInd = int(nIte/1000)
+
 
 # Rの二乗誤差の閾値
 threSquaredLoss = 200
@@ -43,12 +47,14 @@ modelPath = 'models'
 logPath = 'logs'
 
 noiseSigmaEmbed = 3
-noiseSigma = 200
+noiseSigma = 10
 
 ALOCC = 0
 ALDAD = 1
 
-trainMode = 0
+trainMode = 1
+
+
 
 if trainMode == ALOCC:
 	postFixStr = 'ALOCC'
@@ -129,10 +135,8 @@ for targetChar in targetChars:
 
 	#--------------
 	# 最大のlossDに対応するF1 score 
-	#maxInds[targetChar] = np.argmax(np.array(lossD_values[targetChar])[:,-1])
 	lossD_tmp = np.array([np.ones([nIte])*lossD_values[targetChar][i][0] if len(lossD_values[targetChar][i]) < nIte else lossD_values[targetChar][i] for i in trialNos])
-	maxInds[targetChar] = np.argmax(lossD_tmp[:,-1])
-	#maxInds[targetChar] = np.argmax(np.array(f1DXs[targetChar])[:,-1,-1])
+	maxInds[targetChar] = np.argmax(lossD_tmp[:,nIte])
 	#--------------
 #===========================
 
@@ -145,12 +149,12 @@ f1sR = [[] for tmp in np.arange(len(targetChars))]
 
 for targetChar in targetChars:
 
-	recalls_ = np.array(recallDXs[targetChar][maxInds[targetChar]])[:,-1]
-	precisions_ = np.array(precisionDXs[targetChar][maxInds[targetChar]])[:,-1]
-	f1s_ = np.array(f1DXs[targetChar][maxInds[targetChar]])[:,-1]
-	recallsR_ = np.array(recallDRXs[targetChar][maxInds[targetChar]])[:,-1]
-	precisionsR_ = np.array(precisionDRXs[targetChar][maxInds[targetChar]])[:,-1]
-	f1sR_ = np.array(f1DRXs[targetChar][maxInds[targetChar]])[:,-1]
+	recalls_ = np.array(recallDXs[targetChar][maxInds[targetChar]])[:,resInd]
+	precisions_ = np.array(precisionDXs[targetChar][maxInds[targetChar]])[:,resInd]
+	f1s_ = np.array(f1DXs[targetChar][maxInds[targetChar]])[:,resInd]
+	recallsR_ = np.array(recallDRXs[targetChar][maxInds[targetChar]])[:,resInd]
+	precisionsR_ = np.array(precisionDRXs[targetChar][maxInds[targetChar]])[:,resInd]
+	f1sR_ = np.array(f1DRXs[targetChar][maxInds[targetChar]])[:,resInd]
 
 	recalls[targetChar] = recalls_
 	precisions[targetChar] = precisions_
