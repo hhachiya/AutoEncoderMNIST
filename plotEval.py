@@ -30,9 +30,9 @@ testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
 #trialNos = [0,1,2]
-trialNos = [0]
+trialNos = [0,1]
 
-nIte = 5000
+nIte = 10000
 resInd = int(nIte/1000)
 
 
@@ -52,7 +52,7 @@ noiseSigma = 10
 ALOCC = 0
 ALDAD = 1
 
-trainMode = 1
+trainMode = 0
 
 
 
@@ -136,7 +136,8 @@ for targetChar in targetChars:
 	#--------------
 	# 最大のlossDに対応するF1 score 
 	lossD_tmp = np.array([np.ones([nIte])*lossD_values[targetChar][i][0] if len(lossD_values[targetChar][i]) < nIte else lossD_values[targetChar][i] for i in trialNos])
-	maxInds[targetChar] = np.argmax(lossD_tmp[:,nIte])
+	pdb.set_trace()
+	maxInds[targetChar] = np.argmax(lossD_tmp[:,nIte-1])
 	#--------------
 #===========================
 

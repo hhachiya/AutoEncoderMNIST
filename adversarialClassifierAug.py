@@ -27,6 +27,7 @@ ALOCC = 0
 ALDAD = 1
 isStop = False
 isEmbedSampling = True
+isTrain = True
 
 if len(sys.argv) > 1:
 	# 文字の種類
@@ -94,7 +95,7 @@ elif trainMode == ALDAD:
 	postFix = "_ALDAD_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
 
 # 反復回数
-nIte = 10000
+nIte = 5000
 
 visualPath = 'visualization'
 modelPath = 'models'
@@ -460,13 +461,8 @@ while not isStop:
 
 	#==============
 	# ALOCC(Adversarially Learned One-Class Classifier)の学習
-	if trainMode == ALOCC:
+	if (trainMode == ALOCC) & isTrain:
 
-		#if ite == 2000:
-		#	isTrainingD = True
-
-		if ite >= nIte:
-			isStop = True
 
 		# training R network with batch_x & batch_x_fake
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
@@ -482,34 +478,17 @@ while not isStop:
 											[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 											feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
-
-		#if (lossR_value < threLossR) & (ite > nIte):
-		#	print("stopped training")
-		#	isStop = True
 	#==============
 
 	#==============
 	# ALDAD(Adversarially Learned Discriminative Abnormal Detector)の学習
-	elif trainMode == ALDAD:
-		#if ite == 2000:
-		#	isEmbedSampling = True
-
-		if ite >= nIte:
-			isStop = True
+	elif (trainMode == ALDAD) & isTrain:
 
 
 		# training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
-
-		'''
-		# training D with batch_x
-		if not isEmbedSampling:
-			_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
-										[trainerD, lossD, predictFake_train, predictTrue_train],
-										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
-		'''
 
 		if isEmbedSampling:
 			#------------
@@ -530,6 +509,9 @@ while not isStop:
 
 	# もし誤差が下がらない場合は終了
 	if (ite > 2000) & (lossD_value < -10):
+		isTrain = False
+
+	if ite >= nIte:
 		isStop = True
 		
 			
