@@ -94,7 +94,7 @@ elif trainMode == ALDAD:
 	postFix = "_ALDAD_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
 
 # 反復回数
-nIte = 5000
+nIte = 10000
 
 visualPath = 'visualization'
 modelPath = 'models'
@@ -297,6 +297,7 @@ def DNet(x, z_dim=1, reuse=False, keepProb=1.0):
 xTrue = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 xFake = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 xTest = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
+xTestNoise = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 encoderR_train_aug = tf.placeholder(tf.float32, shape=[None, z_dim_R])
 
 # 学習用
@@ -305,7 +306,7 @@ decoderR_train = decoderR(encoderR_train, z_dim_R, keepProb=1.0)
 decoderR_train_aug = decoderR(encoderR_train_aug, z_dim_R, reuse=True, keepProb=1.0)
 
 # テスト用
-encoderR_test = encoderR(xTest, z_dim_R, reuse=True, keepProb=1.0)
+encoderR_test = encoderR(xTestNoise, z_dim_R, reuse=True, keepProb=1.0)
 decoderR_test = decoderR(encoderR_test, z_dim_R, reuse=True, keepProb=1.0)
 #===========================
 
@@ -546,6 +547,8 @@ while not isStop:
 	#--------------
 	# テスト
 	if (ite % 1000 == 0) | isStop:
+		print("min:{}, max:{}".format(np.min(predictTrue_train_value),np.max(predictTrue_train_value)))
+		threFake = np.min(predictTrue_train_value)
 	
 		
 		predictDX_value = [[] for tmp in np.arange(len(testFakeRatios))]
@@ -568,14 +571,18 @@ while not isStop:
 			#fakeTestIndsSelected = fakeTestInds[np.random.permutation(len(fakeTestInds))[:fakeNum]]
 			fakeTestIndsSelected = fakeTestInds[:fakeNum]
 
+
 			# reshape & concat
 			test_x = np.reshape(myData.test.images[targetTestIndsSelected],(len(targetTestIndsSelected),28,28,1))
 			test_x_fake = np.reshape(myData.test.images[fakeTestIndsSelected],(len(fakeTestIndsSelected),28,28,1))
 			test_x = np.vstack([test_x, test_x_fake])
+
+			# add noise
+			test_x_noise = test_x + np.random.normal(0,noiseSigma,test_x.shape)
 			test_y = np.hstack([np.ones(len(targetTestIndsSelected)),np.zeros(len(fakeTestIndsSelected))])
 
 			predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind] = sess.run([predictDX, predictDRX, decoderR_test],
-													feed_dict={xTest: test_x})
+													feed_dict={xTest: test_x, xTestNoise: test_x_noise})
 													
 			#--------------
 			# 評価値の計算と記録
