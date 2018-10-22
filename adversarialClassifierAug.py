@@ -19,7 +19,7 @@ np.random.seed(0)
 
 #===========================
 # パラメータの設定
-z_dim_R = 100
+z_dim_R = 200
 #z_dim_R = 2
 
 # 学習モード
@@ -464,14 +464,15 @@ while not isStop:
 	if (trainMode == ALOCC) & isTrain:
 
 
-		# training R network with batch_x & batch_x_fake
-		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
-											[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
-											feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 		# training D network with batch_x & batch_x_fake
 		_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 											[trainerD, lossD, predictFake_train, predictTrue_train],
 											feed_dict={xTrue: batch_x,xFake: batch_x_fake})
+
+		# training R network with batch_x & batch_x_fake
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+											[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+											feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
 		# Re-training R network with batch_x & batch_x_fake
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
@@ -506,6 +507,12 @@ while not isStop:
 			#------------
 
 			_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run([trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
+
+
+		# Re-training R with batch_x
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
 	# もし誤差が下がらない場合は終了
 	if (ite > 2000) & (lossD_value < -10):
