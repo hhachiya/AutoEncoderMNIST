@@ -43,11 +43,17 @@ modelPath = 'models'
 logPath = 'logs'
 
 noiseSigmaEmbed = 3
-noiseSigma = 50
+noiseSigma = 200
 
-postFixStr = 'ALDAD'
-#postFixStr = 'ALOCC'
-#postFixStr = ''
+ALOCC = 0
+ALDAD = 1
+
+trainMode = 0
+
+if trainMode == ALOCC:
+	postFixStr = 'ALOCC'
+elif trainMode == ALDAD:
+	postFixStr = 'ALDAD'
 
 #===========================
 
@@ -94,8 +100,11 @@ maxInds = [[] for tmp in targetChars]
 for targetChar in targetChars:
 	for trialNo in trialNos:
 		# ファイル名のpostFix
-		#postFix = "_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma)
-		postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
+
+		if trainMode == ALOCC:
+			postFix = "_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma)
+		elif trainMode == ALDAD:
+			postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
 
 		#--------------
 		# pickleから読み込み
@@ -122,8 +131,8 @@ for targetChar in targetChars:
 	# 最大のlossDに対応するF1 score 
 	#maxInds[targetChar] = np.argmax(np.array(lossD_values[targetChar])[:,-1])
 	lossD_tmp = np.array([np.ones([nIte])*lossD_values[targetChar][i][0] if len(lossD_values[targetChar][i]) < nIte else lossD_values[targetChar][i] for i in trialNos])
-	#maxInds[targetChar] = np.argmax(lossD_tmp[:,-1])
-	maxInds[targetChar] = np.argmax(np.array(f1DXs[targetChar])[:,-1,-1])
+	maxInds[targetChar] = np.argmax(lossD_tmp[:,-1])
+	#maxInds[targetChar] = np.argmax(np.array(f1DXs[targetChar])[:,-1,-1])
 	#--------------
 #===========================
 
