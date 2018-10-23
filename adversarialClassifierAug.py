@@ -28,7 +28,7 @@ ALDAD = 1
 isStop = False
 isEmbedSampling = True
 isTrain = True
-isVisualize = False
+isVisualize = True
 
 if len(sys.argv) > 1:
 	# 文字の種類
@@ -551,12 +551,14 @@ while not isStop:
 			plt.imshow(decoderR_train_aug_value[0,:,:,0],cmap="gray")
 			plt.savefig("visualization/x_aug.eps")
 		
-			if z_dim == 2:
+			if z_dim_R == 2:
 				# plot example of embedded vectors, z
 				plt.plot(encoderR_train_value[:,0],encoderR_train_value[:,1],'bo',markersize=6)
 				plt.plot(aug_z[:,0],aug_z[:,1],'r.',markersize=6)
 				plt.gca().invert_yaxis()
 				plt.savefig("visualization/z.eps")
+
+			pdb.set_trace()
 		
 		print("min:{}, max:{}".format(np.min(predictTrue_train_value),np.max(predictTrue_train_value)))
 		threFake = np.min(predictTrue_train_value)
