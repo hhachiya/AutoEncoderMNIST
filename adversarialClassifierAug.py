@@ -28,6 +28,7 @@ ALDAD = 1
 isStop = False
 isEmbedSampling = True
 isTrain = True
+isVisualize = False
 
 if len(sys.argv) > 1:
 	# 文字の種類
@@ -392,7 +393,6 @@ sess.run(tf.global_variables_initializer())
 #--------------
 # MNISTのデータの取得
 myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
-#myData = input_data.read_data_sets("MNIST/")
 
 targetTrainInds = np.where(myData.train.labels == targetChar)[0]
 targetTrainData = myData.train.images[myData.train.labels == targetChar]
@@ -536,6 +536,28 @@ while not isStop:
 	#--------------
 	# テスト
 	if (ite % 1000 == 0) | isStop:
+		
+		if isVisualize:
+			# plot example of true, fake, reconstructed x
+			plt.imshow(batch_x[0,:,:,0],cmap="gray")
+			plt.savefig("visualization/x_true.eps")
+
+			plt.imshow(batch_x_fake[0,:,:,0],cmap="gray")
+			plt.savefig("visualization/x_fake.eps")
+		
+			plt.imshow(decoderR_train_value[0,:,:,0],cmap="gray")
+			plt.savefig("visualization/x_reconstructed.eps")
+		
+			plt.imshow(decoderR_train_aug_value[0,:,:,0],cmap="gray")
+			plt.savefig("visualization/x_aug.eps")
+		
+			if z_dim == 2:
+				# plot example of embedded vectors, z
+				plt.plot(encoderR_train_value[:,0],encoderR_train_value[:,1],'bo',markersize=6)
+				plt.plot(aug_z[:,0],aug_z[:,1],'r.',markersize=6)
+				plt.gca().invert_yaxis()
+				plt.savefig("visualization/z.eps")
+		
 		print("min:{}, max:{}".format(np.min(predictTrue_train_value),np.max(predictTrue_train_value)))
 		threFake = np.min(predictTrue_train_value)
 	
