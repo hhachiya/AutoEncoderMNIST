@@ -19,7 +19,7 @@ np.random.seed(0)
 
 #===========================
 # パラメータの設定
-z_dim_R = 200
+z_dim_R = 100
 #z_dim_R = 2
 
 # 学習モード
@@ -68,7 +68,7 @@ threLossR = 50
 threLossD = -10e-8
 
 # データ拡張のパラメータ
-clusterNum = 5
+clusterNum = 10
 augNum = 100
 
 # バッチデータ数
@@ -93,7 +93,7 @@ nPlotImg = 10
 if trainMode == ALOCC:
 	postFix = "_ALOCC_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma)
 elif trainMode == ALDAD:
-	postFix = "_ALDAD_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
+	postFix = "_ALDAD_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
 
 # 反復回数
 nIte = 5000
@@ -538,6 +538,8 @@ while not isStop:
 	if (ite % 1000 == 0) | isStop:
 		
 		if isVisualize:
+			plt.close()
+
 			# plot example of true, fake, reconstructed x
 			plt.imshow(batch_x[0,:,:,0],cmap="gray")
 			plt.savefig("visualization/x_true.eps")
@@ -547,9 +549,10 @@ while not isStop:
 		
 			plt.imshow(decoderR_train_value[0,:,:,0],cmap="gray")
 			plt.savefig("visualization/x_reconstructed.eps")
-		
-			plt.imshow(decoderR_train_aug_value[0,:,:,0],cmap="gray")
-			plt.savefig("visualization/x_aug.eps")
+	
+			for i in np.arange(10):
+				plt.imshow(decoderR_train_aug_value[i,:,:,0],cmap="gray")
+				plt.savefig("visualization/x_aug_{}.eps".format(i))
 		
 			if z_dim_R == 2:
 				# plot example of embedded vectors, z
@@ -558,7 +561,6 @@ while not isStop:
 				plt.gca().invert_yaxis()
 				plt.savefig("visualization/z.eps")
 
-			pdb.set_trace()
 		
 		print("min:{}, max:{}".format(np.min(predictTrue_train_value),np.max(predictTrue_train_value)))
 		threFake = np.min(predictTrue_train_value)

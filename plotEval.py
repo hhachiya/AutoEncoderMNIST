@@ -11,7 +11,7 @@ import sys
 
 #===========================
 # パラメータの設定
-z_dim_R = 200
+z_dim_R = 100
 
 targetChars = [0,1,2,3,4,5,6,7,8,9]
 
@@ -33,6 +33,9 @@ trialNos = [0,1,2]
 nIte = 5000
 resInd = int((nIte-1)/1000)
 
+# クラスタ数
+clusterNum = 10
+
 
 # Rの二乗誤差の閾値
 threSquaredLoss = 200
@@ -45,12 +48,12 @@ modelPath = 'models'
 logPath = 'logs'
 
 noiseSigmaEmbed = 3
-noiseSigma = 200
+noiseSigma = 100
 
 ALOCC = 0
 ALDAD = 1
 
-trainMode = 0
+trainMode = 1
 
 if trainMode == ALOCC:
 	postFixStr = 'ALOCC'
@@ -106,7 +109,8 @@ for targetChar in targetChars:
 		if trainMode == ALOCC:
 			postFix = "_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma)
 		elif trainMode == ALDAD:
-			postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
+			#postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
+			postFix = "_{}_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed, clusterNum)
 
 		#--------------
 		# pickleから読み込み
