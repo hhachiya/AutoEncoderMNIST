@@ -19,8 +19,6 @@ np.random.seed(0)
 
 #===========================
 # パラメータの設定
-z_dim_R = 100
-#z_dim_R = 2
 
 # 学習モード
 ALOCC = 0
@@ -41,14 +39,20 @@ if len(sys.argv) > 1:
 		targetChar = int(sys.argv[2])
 		trialNo = int(sys.argv[3])
 		noiseSigma = int(sys.argv[4])
+		z_dim_R = int(sys.argv[5])
+		nIte = int(sys.argv[6])
 	else:
 		targetChar = 0
 		trialNo = 0	
 		noiseSigma = 40
+		z_dim_R = 2
+		nIte = 5000
 
 else:
 	# 方式の種類
 	trainMode = ALDAD
+
+	
 
 # Rの二乗誤差の重み係数
 lambdaR = 0.4
@@ -101,8 +105,6 @@ elif trainMode == ALDAD2:
 elif trainMode == ALDAD3:
 	postFix = "_ALDAD3_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
 
-# 反復回数
-nIte = 5000
 
 visualPath = 'visualization'
 modelPath = 'models'
