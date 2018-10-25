@@ -25,7 +25,8 @@ z_dim_R = 100
 # 学習モード
 ALOCC = 0
 ALDAD = 1
-ALDAD2 = 1
+ALDAD2 = 2
+ALDAD3 = 3
 isStop = False
 isEmbedSampling = True
 isTrain = True
@@ -95,6 +96,10 @@ if trainMode == ALOCC:
 	postFix = "_ALOCC_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma)
 elif trainMode == ALDAD:
 	postFix = "_ALDAD_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
+elif trainMode == ALDAD2:
+	postFix = "_ALDAD2_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
+elif trainMode == ALDAD3:
+	postFix = "_ALDAD3_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
 
 # 反復回数
 nIte = 5000
@@ -344,10 +349,11 @@ lossMMD = compute_mmd(encoderR_sample, encoderR_train)
 	
 lossR = tf.reduce_mean(tf.square(decoderR_train - xTrue))
 lossRAll = tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + lambdaR * lossR
-lossRAll_aug = tf.reduce_mean(tf.log(1 - predictFake_train_aug + lambdaSmall)) + lambdaR * lossR
+lossRAll_aug = tf.reduce_mean(tf.log(predictFake_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train_aug +  lambdaSmall)) + lambdaR*lossR
 
 lossD = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train +  lambdaSmall))
 lossD_aug = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train_aug +  lambdaSmall))
+lossD_aug2 = tf.reduce_mean(tf.log(predictTrue_train + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train_aug +  lambdaSmall))
 
 # R & Dの変数
 Rvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="encoderR") + tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="decoderR")
@@ -363,6 +369,7 @@ trainerRAll = tf.train.AdamOptimizer(1e-3).minimize(lossRAll, var_list=Rvars)
 trainerRAll_aug = tf.train.AdamOptimizer(1e-3).minimize(lossRAll_aug, var_list=Rvars)
 trainerD = tf.train.AdamOptimizer(1e-3).minimize(-lossD, var_list=Dvars)
 trainerD_aug = tf.train.AdamOptimizer(1e-3).minimize(-lossD_aug, var_list=Dvars)
+trainerD_aug2 = tf.train.AdamOptimizer(1e-3).minimize(-lossD_aug2, var_list=Dvars)
 
 '''
 optimizer = tf.train.AdamOptimizer()
@@ -491,8 +498,8 @@ while not isStop:
 
 		# training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
-										[trainerR, lossR, lossRAll_aug, decoderR_train, encoderR_train],
-										feed_dict={xTrue: batch_x, xFake: aug_z})
+										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
 		#------------
 		# clustering samples in embeded space, z
@@ -515,8 +522,8 @@ while not isStop:
 
 		# Re-training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
-										[trainerR, lossR, lossRAll_aug, decoderR_train, encoderR_train],
-										feed_dict={xTrue: batch_x, xFake: aug_z})
+										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 	#==============
 
 	#==============
@@ -526,9 +533,8 @@ while not isStop:
 
 		# training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
-										[trainerR, lossR, lossRAll_aug, decoderR_train, encoderR_train],
-										#[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
-										feed_dict={xTrue: batch_x, xFake: aug_z})
+										[trainerR, lossR, lossRAll, decoderR_train, encoderR_train],
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
 		#------------
 		# clustering samples in embeded space, z
@@ -551,9 +557,42 @@ while not isStop:
 
 		# Re-training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
-										[trainerRAll_aug, lossR, lossRAll_aug, decoderR_train, encoderR_train],
-										#[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
-										feed_dict={xTrue: batch_x, xFake: aug_z})
+										[trainerR, lossR, lossRAll, decoderR_train, encoderR_train],
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+	#==============
+
+	#==============
+	# ALDAD3(Adversarially Learned Discriminative Abnormal Detector)の学習
+	elif (trainMode == ALDAD3) & isTrain:
+
+
+		# training R with batch_x
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+										[trainerR, lossR, lossRAll, decoderR_train, encoderR_train],
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+
+		#------------
+		# clustering samples in embeded space, z
+		kmeans = KMeans(n_clusters=clusterNum, random_state=0).fit(encoderR_train_value)
+		means = kmeans.cluster_centers_
+
+		# approximate the probability distribution of z, p_theta(z)
+		stds = np.array([np.std(encoderR_train_value[kmeans.labels_==ind,:], axis=0) for ind in np.arange(clusterNum)])
+
+		# sampling from approximated probability distribution, p_theta(z)
+		aug_z = np.reshape(np.array([means[ind,:] + np.multiply(np.random.randn(augNum,z_dim_R),
+			np.tile(stds[ind,:]*noiseSigmaEmbed,[augNum,1])) for ind in np.arange(clusterNum)]),[-1,z_dim_R])
+
+		#------------
+
+		_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
+										[trainerD_aug2, lossD_aug2, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
+										feed_dict={xTrue: batch_x, xFake:batch_x_fake, encoderR_train_aug: aug_z})
+
+		# Re-training R with batch_x
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+										feed_dict={xTrue: batch_x, xFake:batch_x_fake, encoderR_train_aug: aug_z})
 	#==============
 
 	# もし誤差が下がらない場合は終了
@@ -577,7 +616,7 @@ while not isStop:
 
 	#--------------
 	# テスト
-	if (ite % 1000 == 0) | isStop:
+	if (ite % 1000 == 0):
 		
 		if isVisualize:
 			plt.close()
@@ -591,10 +630,11 @@ while not isStop:
 		
 			plt.imshow(decoderR_train_value[0,:,:,0],cmap="gray")
 			plt.savefig("visualization/x_reconstructed.eps")
-	
-			for i in np.arange(10):
-				plt.imshow(decoderR_train_aug_value[i,:,:,0],cmap="gray")
-				plt.savefig("visualization/x_aug_{}.eps".format(i))
+
+			if trainMode > ALOCC:	
+				for i in np.arange(10):
+					plt.imshow(decoderR_train_aug_value[i,:,:,0],cmap="gray")
+					plt.savefig("visualization/x_aug_{}.eps".format(i))
 		
 			if z_dim_R == 2:
 				# plot example of embedded vectors, z
@@ -621,11 +661,9 @@ while not isStop:
 			targetNum = len(targetTestInds) - fakeNum
 			
 			# Trueのindex
-			#targetTestIndsSelected = targetTestIndsShuffle[:targetNum]
 			targetTestIndsSelected = targetTestInds[:targetNum]
 
 			# Fakeのindex
-			#fakeTestIndsSelected = fakeTestInds[np.random.permutation(len(fakeTestInds))[:fakeNum]]
 			fakeTestIndsSelected = fakeTestInds[:fakeNum]
 
 
@@ -638,7 +676,11 @@ while not isStop:
 			test_x_noise = test_x + np.random.normal(0,noiseSigma,test_x.shape)
 			test_y = np.hstack([np.ones(len(targetTestIndsSelected)),np.zeros(len(fakeTestIndsSelected))])
 
-			predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind] = sess.run([predictDX, predictDRX, decoderR_test],
+			if trainMode == ALOCC:
+				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind] = sess.run([predictDX, predictDRX, decoderR_test],
+													feed_dict={xTest: test_x, xTestNoise: test_x})
+			elif trainMode > ALOCC:
+				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind] = sess.run([predictDX, predictDRX, decoderR_test],
 													feed_dict={xTest: test_x, xTestNoise: test_x_noise})
 													
 			#--------------
@@ -728,7 +770,7 @@ while not isStop:
 
 				#--------------
 				# 提案法で生成した画像（元の画像、提案法で生成たい異常画像）を保存
-				if isEmbedSampling & (trainMode > 0):
+				if isEmbedSampling & (trainMode > ALOCC):
 					path = os.path.join(visualPath,"img_train_aug_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
 					plotImg(batch_x[:nPlotImg], decoderR_train_aug_value[:nPlotImg],path)
 				#--------------
@@ -783,7 +825,7 @@ with open(path, "wb") as fp:
 	pickle.dump(precisionDRXsNeg,fp)
 	pickle.dump(f1DRXsNeg,fp)	
 
-	if trainMode > 0:
+	if trainMode > ALOCC:
 		pickle.dump(decoderR_train_aug_value,fp)
 #--------------
 #===========================

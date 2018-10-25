@@ -28,7 +28,8 @@ threFake = 0.5
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
-trialNos = [0,1,2]
+#trialNos = [0,1,2]
+trialNos = [0,1]
 
 nIte = 5000
 resInd = int((nIte-1)/1000)
@@ -48,17 +49,23 @@ modelPath = 'models'
 logPath = 'logs'
 
 noiseSigmaEmbed = 3
-noiseSigma = 100
+noiseSigma = 10
 
 ALOCC = 0
 ALDAD = 1
+ALDAD2 = 2
+ALDAD3 = 3
 
-trainMode = 1
+trainMode = 2
 
 if trainMode == ALOCC:
 	postFixStr = 'ALOCC'
 elif trainMode == ALDAD:
 	postFixStr = 'ALDAD'
+elif trainMode == ALDAD2:
+	postFixStr = 'ALDAD2'
+elif trainMode == ALDAD3:
+	postFixStr = 'ALDAD3'
 
 #===========================
 
@@ -108,7 +115,7 @@ for targetChar in targetChars:
 
 		if trainMode == ALOCC:
 			postFix = "_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma)
-		elif trainMode == ALDAD:
+		elif trainMode > ALOCC:
 			#postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
 			postFix = "_{}_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed, clusterNum)
 
