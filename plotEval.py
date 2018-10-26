@@ -28,8 +28,7 @@ threFake = 0.5
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
-#trialNos = [0,1,2]
-trialNos = [0,1]
+trialNos = [0,1,2]
 
 nIte = 5000
 resInd = int((nIte-1)/1000)
@@ -49,14 +48,14 @@ modelPath = 'models'
 logPath = 'logs'
 
 noiseSigmaEmbed = 3
-noiseSigma = 10
+noiseSigma = 100
 
 ALOCC = 0
 ALDAD = 1
 ALDAD2 = 2
 ALDAD3 = 3
 
-trainMode = 2
+trainMode = 1
 
 if trainMode == ALOCC:
 	postFixStr = 'ALOCC'
@@ -142,8 +141,8 @@ for targetChar in targetChars:
 
 	#--------------
 	# 最大のlossDに対応するF1 score 
-	#lossD_tmp = np.array([np.ones([nIte])*lossD_values[targetChar][i][0] if len(lossD_values[targetChar][i]) < nIte else lossD_values[targetChar][i] for i in trialNos])
-	maxInds[targetChar] = np.argmax(np.array(lossD_values[targetChar])[:,nIte-1])
+	#maxInds[targetChar] = np.argmax(np.array(lossD_values[targetChar])[:,nIte-1])
+	maxInds[targetChar] = np.argmax(np.array(f1DXs[targetChar])[:,-1,resInd])
 	#--------------
 #===========================
 

@@ -28,7 +28,7 @@ ALDAD3 = 3
 isStop = False
 isEmbedSampling = True
 isTrain = True
-isVisualize = True
+isVisualize = False
 
 if len(sys.argv) > 1:
 	# 文字の種類
@@ -639,10 +639,23 @@ while not isStop:
 					plt.savefig("visualization/x_aug_{}.eps".format(i))
 		
 			if z_dim_R == 2:
+				# get z samples for true 
+				encoderR_trainTrue_value = sess.run(encoderR_train, feed_dict={xTrue: batch_x, xFake:batch_x})
+
 				# plot example of embedded vectors, z
-				plt.plot(encoderR_train_value[:,0],encoderR_train_value[:,1],'bo',markersize=6)
-				plt.plot(aug_z[:,0],aug_z[:,1],'r.',markersize=6)
-				plt.gca().invert_yaxis()
+				plt.plot(encoderR_train_value[:,0],encoderR_train_value[:,1],'o',markersize=6,markeredgecolor="b",markerfacecolor="w")
+				plt.plot(encoderR_trainTrue_value[:,0],encoderR_trainTrue_value[:,1],'d',markersize=6,markeredgecolor="g",markerfacecolor="w")
+
+				if trainMode > ALOCC:
+					plt.plot(aug_z[:,0],aug_z[:,1],'rd',markersize=6)
+
+				#plt.gca().invert_yaxis()
+				plt.xlim(int(np.min([np.min(encoderR_train_value[:,0]),np.min(encoderR_trainTrue_value[:,0])]) - 100),
+					int(np.max([np.max(encoderR_train_value[:,0]),np.max(encoderR_trainTrue_value[:,0])]) + 100) )
+
+				plt.ylim(int(np.min([np.min(encoderR_train_value[:,1]),np.min(encoderR_trainTrue_value[:,1])]) - 100),
+					int(np.max([np.max(encoderR_train_value[:,1]),np.max(encoderR_trainTrue_value[:,1])]) + 100) )
+
 				plt.savefig("visualization/z.eps")
 
 		
