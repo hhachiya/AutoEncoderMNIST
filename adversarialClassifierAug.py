@@ -571,12 +571,10 @@ while not isStop:
 
 		#------------
 		# clustering samples in embeded space, z
-		minZ = np.min(encoderR_train_value,axis=0)*noiseSigmaEmbed
-		maxZ = np.max(encoderR_train_value,axis=0)*noiseSigmaEmbed
-		#minZ = np.tile(np.min(encoderR_train_value),z_dim_R)
-		#maxZ = np.tile(np.max(encoderR_train_value),z_dim_R)
-		randZ = np.random.rand(augNum*10, z_dim_R) - np.ones([augNum*10,z_dim_R])*0.5
-		aug_z = np.matmul(randZ, np.diag(maxZ-minZ)) + (maxZ - minZ)/2
+		minZ = np.min(encoderR_train_value,axis=0)
+		maxZ = np.max(encoderR_train_value,axis=0)
+		randZ = np.random.rand(augNum * clusterNum, z_dim_R)
+		aug_z = np.matmul(randZ, np.diag(maxZ-minZ)*noiseSigmaEmbed) + ((maxZ-minZ)-(maxZ-minZ)*noiseSigmaEmbed)/2
 		#------------
 
 		_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
@@ -657,8 +655,6 @@ while not isStop:
 
 				plt.savefig("visualization/z.eps")
 
-			pdb.set_trace()
-
 		
 		print("min:{}, max:{}".format(np.min(predictTrue_train_value),np.max(predictTrue_train_value)))
 		threFake = np.min(predictTrue_train_value)
@@ -737,8 +733,8 @@ while not isStop:
 				fig, figInds = plt.subplots(nrows=2, ncols=x.shape[0], sharex=True)
 
 				for figInd in np.arange(x.shape[0]):
-					fig0 = figInds[0][figInd].imshow(x[figInd,:,:,0])
-					fig1 = figInds[1][figInd].imshow(y[figInd,:,:,0])
+					fig0 = figInds[0][figInd].imshow(x[figInd,:,:,0],cmap="gray")
+					fig1 = figInds[1][figInd].imshow(y[figInd,:,:,0],cmap="gray")
 
 					# ticks, axisを隠す
 					fig0.axes.get_xaxis().set_visible(False)
@@ -762,9 +758,9 @@ while not isStop:
 				fig, figInds = plt.subplots(nrows=3, ncols=nPlotImg, sharex=True)
 	
 				for figInd in np.arange(figInds.shape[1]):
-					fig0 = figInds[0][figInd].imshow(batch_x[figInd,:,:,0])
-					fig1 = figInds[1][figInd].imshow(batch_x_fake[figInd,:,:,0])
-					fig2 = figInds[2][figInd].imshow(decoderR_train_value[figInd,:,:,0])
+					fig0 = figInds[0][figInd].imshow(batch_x[figInd,:,:,0],cmap="gray")
+					fig1 = figInds[1][figInd].imshow(batch_x_fake[figInd,:,:,0],cmap="gray")
+					fig2 = figInds[2][figInd].imshow(decoderR_train_value[figInd,:,:,0],cmap="gray")
 
 					# ticks, axisを隠す
 					fig0.axes.get_xaxis().set_visible(False)
