@@ -28,8 +28,7 @@ threFake = 0.5
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
-#trialNos = [0,1,2]
-trialNos = [0]
+trialNos = [0,1,2]
 
 nIte = 5000
 resInd = int((nIte-1)/1000)
@@ -48,7 +47,7 @@ visualPath = 'visualization'
 modelPath = 'models'
 logPath = 'logs'
 
-noiseSigmaEmbed = 2 
+noiseSigmaEmbed = 3 
 noiseSigma = 0
 
 ALOCC = 0
