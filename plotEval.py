@@ -47,15 +47,15 @@ visualPath = 'visualization'
 modelPath = 'models'
 logPath = 'logs'
 
-noiseSigmaEmbed = 3
-noiseSigma = 100
+noiseSigmaEmbed = 3 
+noiseSigma = 0
 
 ALOCC = 0
 ALDAD = 1
 ALDAD2 = 2
 ALDAD3 = 3
 
-trainMode = 1
+trainMode = 3
 
 if trainMode == ALOCC:
 	postFixStr = 'ALOCC'

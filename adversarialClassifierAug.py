@@ -28,7 +28,7 @@ ALDAD3 = 3
 isStop = False
 isEmbedSampling = True
 isTrain = True
-isVisualize = False
+isVisualize = True
 
 if len(sys.argv) > 1:
 	# 文字の種類
@@ -47,6 +47,11 @@ if len(sys.argv) > 1:
 		noiseSigma = 40
 		z_dim_R = 2
 		nIte = 5000
+
+	if len(sys.argv) > 7:
+		noiseSigmaEmbed = int(sys.argv[7])
+	else:
+		noiseSigmaEmbed = 3
 
 else:
 	# 方式の種類
@@ -83,14 +88,6 @@ batchSize = 300
 # 変数をまとめたディクショナリ
 params = {'z_dim_R':z_dim_R, 'testFakeRatios':testFakeRatios, 'labmdaR':lambdaR,
 'threFake':threFake, 'targetChar':targetChar,'batchSize':batchSize}
-
-# ノイズの大きさ
-#noiseSigma = 0.155
-#noiseSigma = 100
-#noiseSigma = 40
-
-# embedded spaceにおけるノイズのレベル
-noiseSigmaEmbed = 3
 
 # プロットする画像数
 nPlotImg = 10
@@ -225,7 +222,6 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 		fcW1 = weight_variable("fcW1", [conv2size, z_dim])
 		fcB1 = bias_variable("fcB1", [z_dim])
 		fc1 = fc_relu(conv2, fcW1, fcB1, keepProb)
-		#fc1 = fc_sigmoid(conv2, fcW1, fcB1, keepProb)
 		#--------------
 
 		return fc1
@@ -570,21 +566,17 @@ while not isStop:
 
 		# training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
-										[trainerR, lossR, lossRAll, decoderR_train, encoderR_train],
+										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
 		#------------
 		# clustering samples in embeded space, z
-		kmeans = KMeans(n_clusters=clusterNum, random_state=0).fit(encoderR_train_value)
-		means = kmeans.cluster_centers_
-
-		# approximate the probability distribution of z, p_theta(z)
-		stds = np.array([np.std(encoderR_train_value[kmeans.labels_==ind,:], axis=0) for ind in np.arange(clusterNum)])
-
-		# sampling from approximated probability distribution, p_theta(z)
-		aug_z = np.reshape(np.array([means[ind,:] + np.multiply(np.random.randn(augNum,z_dim_R),
-			np.tile(stds[ind,:]*noiseSigmaEmbed,[augNum,1])) for ind in np.arange(clusterNum)]),[-1,z_dim_R])
-
+		minZ = np.min(encoderR_train_value,axis=0)*noiseSigmaEmbed
+		maxZ = np.max(encoderR_train_value,axis=0)*noiseSigmaEmbed
+		#minZ = np.tile(np.min(encoderR_train_value),z_dim_R)
+		#maxZ = np.tile(np.max(encoderR_train_value),z_dim_R)
+		randZ = np.random.rand(augNum*10, z_dim_R) - np.ones([augNum*10,z_dim_R])*0.5
+		aug_z = np.matmul(randZ, np.diag(maxZ-minZ)) + (maxZ - minZ)/2
 		#------------
 
 		_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
@@ -649,14 +641,23 @@ while not isStop:
 				if trainMode > ALOCC:
 					plt.plot(aug_z[:,0],aug_z[:,1],'rd',markersize=6)
 
-				#plt.gca().invert_yaxis()
-				plt.xlim(int(np.min([np.min(encoderR_train_value[:,0]),np.min(encoderR_trainTrue_value[:,0])]) - 100),
-					int(np.max([np.max(encoderR_train_value[:,0]),np.max(encoderR_trainTrue_value[:,0])]) + 100) )
+					plt.xlim(int(np.min([np.min(aug_z[:,0]), np.min(encoderR_train_value[:,0]),np.min(encoderR_trainTrue_value[:,0])]) - 100),
+						int(np.max([np.max(aug_z[:,0]), np.max(encoderR_train_value[:,0]),np.max(encoderR_trainTrue_value[:,0])]) + 100) )
 
-				plt.ylim(int(np.min([np.min(encoderR_train_value[:,1]),np.min(encoderR_trainTrue_value[:,1])]) - 100),
-					int(np.max([np.max(encoderR_train_value[:,1]),np.max(encoderR_trainTrue_value[:,1])]) + 100) )
+					plt.ylim(int(np.min([np.min(aug_z[:,1]), np.min(encoderR_train_value[:,1]),np.min(encoderR_trainTrue_value[:,1])]) - 100),
+						int(np.max([np.max(aug_z[:,1]), np.max(encoderR_train_value[:,1]),np.max(encoderR_trainTrue_value[:,1])]) + 100) )
+
+				else:
+					plt.xlim(int(np.min([np.min(encoderR_train_value[:,0]),np.min(encoderR_trainTrue_value[:,0])]) - 100),
+						int(np.max([np.max(encoderR_train_value[:,0]),np.max(encoderR_trainTrue_value[:,0])]) + 100) )
+
+					plt.ylim(int(np.min([np.min(encoderR_train_value[:,1]),np.min(encoderR_trainTrue_value[:,1])]) - 100),
+						int(np.max([np.max(encoderR_train_value[:,1]),np.max(encoderR_trainTrue_value[:,1])]) + 100) )
+
 
 				plt.savefig("visualization/z.eps")
+
+			pdb.set_trace()
 
 		
 		print("min:{}, max:{}".format(np.min(predictTrue_train_value),np.max(predictTrue_train_value)))
