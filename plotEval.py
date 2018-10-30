@@ -54,8 +54,9 @@ ALOCC = 0
 ALDAD = 1
 ALDAD2 = 2
 ALDAD3 = 3
+ALDAD4 = 4
 
-trainMode = 3
+trainMode = 4
 
 if trainMode == ALOCC:
 	postFixStr = 'ALOCC'
@@ -65,6 +66,8 @@ elif trainMode == ALDAD2:
 	postFixStr = 'ALDAD2'
 elif trainMode == ALDAD3:
 	postFixStr = 'ALDAD3'
+elif trainMode == ALDAD4:
+	postFixStr = 'ALDAD4'
 
 #===========================
 

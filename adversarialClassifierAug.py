@@ -26,6 +26,7 @@ ALDAD = 1
 ALDAD2 = 2
 ALDAD3 = 3
 ALDAD4 = 4
+ALDAD5 = 5
 isStop = False
 isEmbedSampling = True
 isTrain = True
@@ -104,6 +105,8 @@ elif trainMode == ALDAD3:
 	postFix = "_ALDAD3_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
 elif trainMode == ALDAD4:
 	postFix = "_ALDAD4_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
+elif trainMode == ALDAD5:
+	postFix = "_ALDAD5_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
 
 
 visualPath = 'visualization'
@@ -634,6 +637,49 @@ while not isStop:
 										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 	#==============
+	# ALDAD(Adversarially Learned Discriminative Abnormal Detector)の学習
+	elif (trainMode == ALDAD5) & isTrain:
+
+
+		# training R with batch_x
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+
+		#------------
+		# clustering samples in embeded space, z
+		kmeans = KMeans(n_clusters=clusterNum, random_state=0).fit(encoderR_train_value)
+		means = kmeans.cluster_centers_
+
+		# approximate the probability distribution of z, p_theta(z)
+		stds = np.array([np.std(encoderR_train_value[kmeans.labels_==ind,:], axis=0) for ind in np.arange(clusterNum)])
+
+		pdb.set_trace()
+
+		# sampling from approximated probability distribution, p_theta(z)
+		for ind in np.arange(clusterNum):
+			aug_tmp = means[ind,:] + np.multiply(np.random.randn(augNum,z_dim_R), np.tile(stds[ind,:]*noiseSigmaEmbed,[augNum,1]))
+			dists = kmeans.transform(aug_tmp)
+
+			aug_selected = aug_tmp[np.sum(dists < distThre,axis=1)==0,:]
+
+			if ind == 0:
+				aug_z = aug_selected
+			else:
+				aug_z = np.vstack([aug_z,aug_selected])
+
+		#------------
+
+		_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
+										[trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
+										feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
+
+		# Re-training R with batch_x
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+	#==============
+
 	# もし誤差が下がらない場合は終了
 	if (ite > 2000) & (lossD_value < -10):
 		isTrain = False
