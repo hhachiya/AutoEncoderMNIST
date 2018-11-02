@@ -106,7 +106,7 @@ elif trainMode == ALDAD3:
 elif trainMode == ALDAD4:
 	postFix = "_ALDAD4_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
 elif trainMode == ALDAD5:
-	postFix = "_ALDAD5_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
+	postFix = "_ALDAD5_fc_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
 
 
 visualPath = 'visualization'
@@ -188,6 +188,12 @@ def fc_relu(inputs, w, b, keepProb=1.0):
 	fc = tf.nn.dropout(fc, keepProb)
 	fc = tf.nn.relu(fc)
 	return fc
+
+# fc layer
+def fc(inputs, w, b, keepProb=1.0):
+	fc = tf.matmul(inputs, w) + b
+	fc = tf.nn.dropout(fc, keepProb)
+	return fc
 	
 # fc layer with softmax
 def fc_sigmoid(inputs, w, b, keepProb=1.0):
@@ -227,7 +233,8 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 		# 7 x 7 x 32 -> z-dim
 		fcW1 = weight_variable("fcW1", [conv2size, z_dim])
 		fcB1 = bias_variable("fcB1", [z_dim])
-		fc1 = fc_relu(conv2, fcW1, fcB1, keepProb)
+		#fc1 = fc_relu(conv2, fcW1, fcB1, keepProb)
+		fc1 = fc(conv2, fcW1, fcB1, keepProb)
 		#--------------
 
 		return fc1
