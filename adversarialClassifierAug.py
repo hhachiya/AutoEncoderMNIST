@@ -640,35 +640,16 @@ while not isStop:
 	# ALDAD(Adversarially Learned Discriminative Abnormal Detector)の学習
 	elif (trainMode == ALDAD5) & isTrain:
 
+		augNtimes = 3
 
 		# training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
-		#------------
-		# clustering samples in embeded space, z
-		kmeans = KMeans(n_clusters=clusterNum, random_state=0).fit(encoderR_train_value)
-		means = kmeans.cluster_centers_
-
-		# approximate the probability distribution of z, p_theta(z)
-		stds = np.array([np.std(encoderR_train_value[kmeans.labels_==ind,:], axis=0) for ind in np.arange(clusterNum)])
-
-		pdb.set_trace()
-
-		# sampling from approximated probability distribution, p_theta(z)
-		for ind in np.arange(clusterNum):
-			aug_tmp = means[ind,:] + np.multiply(np.random.randn(augNum,z_dim_R), np.tile(stds[ind,:]*noiseSigmaEmbed,[augNum,1]))
-			dists = kmeans.transform(aug_tmp)
-
-			aug_selected = aug_tmp[np.sum(dists < distThre,axis=1)==0,:]
-
-			if ind == 0:
-				aug_z = aug_selected
-			else:
-				aug_z = np.vstack([aug_z,aug_selected])
-
-		#------------
+		std = np.std(encoderR_train_value,axis=0)
+		aug_z = np.array([encoderR_train_value[ind] + np.multiply(np.random.randn(augNtimes,z_dim_R),np.tile(std*noiseSigmaEmbed,[augNtimes,1])) for ind in np.arange(batchSize)])
+		aug_z = np.reshape(aug_z,[-1,z_dim_R])
 
 		_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
 										[trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],

@@ -47,7 +47,7 @@ visualPath = 'visualization'
 modelPath = 'models'
 logPath = 'logs'
 
-noiseSigmaEmbed = 3 
+noiseSigmaEmbed = 2 
 noiseSigma = 0
 
 ALOCC = 0
@@ -55,8 +55,9 @@ ALDAD = 1
 ALDAD2 = 2
 ALDAD3 = 3
 ALDAD4 = 4
+ALDAD5 = 5
 
-trainMode = 4
+trainMode = 5
 
 if trainMode == ALOCC:
 	postFixStr = 'ALOCC'
@@ -68,6 +69,8 @@ elif trainMode == ALDAD3:
 	postFixStr = 'ALDAD3'
 elif trainMode == ALDAD4:
 	postFixStr = 'ALDAD4'
+elif trainMode == ALDAD5:
+	postFixStr = 'ALDAD5'
 
 #===========================
 
