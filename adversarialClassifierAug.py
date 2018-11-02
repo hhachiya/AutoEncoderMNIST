@@ -96,7 +96,7 @@ nPlotImg = 10
 
 # ファイル名のpostFix
 if trainMode == ALOCC:
-	postFix = "_ALOCC_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma)
+	postFix = "_ALOCC_fc_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma)
 elif trainMode == ALDAD:
 	postFix = "_ALDAD_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
 elif trainMode == ALDAD2:
