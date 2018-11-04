@@ -744,6 +744,7 @@ while not isStop:
 		predictDX_value = [[] for tmp in np.arange(len(testFakeRatios))]
 		predictDRX_value = [[] for tmp in np.arange(len(testFakeRatios))]
 		decoderR_test_value = [[] for tmp in np.arange(len(testFakeRatios))]
+		encoderR_test_value = [[] for tmp in np.arange(len(testFakeRatios))]
 		
 		#--------------
 		# テストデータの作成	
@@ -770,10 +771,12 @@ while not isStop:
 			test_y = np.hstack([np.ones(len(targetTestIndsSelected)),np.zeros(len(fakeTestIndsSelected))])
 
 			if trainMode == ALOCC:
-				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind] = sess.run([predictDX, predictDRX, decoderR_test],
+				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind], encoderR_test_value[ind] = sess.run(
+													[predictDX, predictDRX, decoderR_test, encoderR_test],
 													feed_dict={xTest: test_x, xTestNoise: test_x})
 			elif trainMode > ALOCC:
-				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind] = sess.run([predictDX, predictDRX, decoderR_test],
+				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind], encoderR_test_value[ind] = sess.run(
+													[predictDX, predictDRX, decoderR_test, encoderR_test],
 													feed_dict={xTest: test_x, xTestNoise: test_x_noise})
 													
 			#--------------
@@ -880,6 +883,30 @@ while not isStop:
 				plotImg(test_x[-nPlotImg:], decoderR_test_value[ind][-nPlotImg:],path)
 				#--------------
 		
+			if isVisualize & (z_dim_R == 2):
+				plt.close()
+				
+				# plot example of embedded vectors, z
+				plt.plot(encoderR_test_value[ind][:targetNum,0],encoderR_test_value[ind][:targetNum,1],'o',markersize=3,markeredgecolor="g",markerfacecolor="None")
+				plt.plot(encoderR_test_value[ind][targetNum:,0],encoderR_test_value[ind][targetNum:,1],'o',markersize=3,markeredgecolor="r",markerfacecolor="None")
+				
+				if trainMode > ALOCC:
+					plt.plot(aug_z[:,0],aug_z[:,1],'.',markersize=2,markeredgecolor="m",markerfacecolor="None")
+					plt.xlim(int(np.min([np.min(aug_z[:,0]), np.min(encoderR_test_value[ind][:,0]),np.min(encoderR_test_value[ind][:,0])]) - 100),
+						int(np.max([np.max(aug_z[:,0]), np.max(encoderR_test_value[ind][:,0]),np.max(encoderR_test_value[ind][:,0])]) + 100) )
+
+					plt.ylim(int(np.min([np.min(aug_z[:,1]), np.min(encoderR_test_value[ind][:,1]),np.min(encoderR_test_value[ind][:,1])]) - 100),
+						int(np.max([np.max(aug_z[:,1]), np.max(encoderR_test_value[ind][:,1]),np.max(encoderR_test_value[ind][:,1])]) + 100) )
+
+				else:
+					plt.xlim(int(np.min([np.min(encoderR_test_value[ind][:,0]),np.min(encoderR_test_value[ind][:,0])]) - 100),
+						int(np.max([np.max(encoderR_test_value[ind][:,0]),np.max(encoderR_test_value[ind][:,0])]) + 100) )
+
+					plt.ylim(int(np.min([np.min(encoderR_test_value[ind][:,1]),np.min(encoderR_test_value[ind][:,1])]) - 100),
+						int(np.max([np.max(encoderR_test_value[ind][:,1]),np.max(encoderR_test_value[ind][:,1])]) + 100) )
+
+				plt.savefig("visualization/z_test_{}_{}.eps".format(ite,ind))
+
 		#--------------
 		# チェックポイントの保存
 		saver = tf.train.Saver()
