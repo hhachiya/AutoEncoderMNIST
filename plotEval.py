@@ -47,7 +47,7 @@ visualPath = 'visualization'
 modelPath = 'models'
 logPath = 'logs'
 
-noiseSigmaEmbed = 2 
+noiseSigmaEmbed = 3 
 noiseSigma = 0
 
 ALOCC = 0
@@ -70,7 +70,7 @@ elif trainMode == ALDAD3:
 elif trainMode == ALDAD4:
 	postFixStr = 'ALDAD4'
 elif trainMode == ALDAD5:
-	postFixStr = 'ALDAD5'
+	postFixStr = 'ALDAD5_fc'
 
 #===========================
 
