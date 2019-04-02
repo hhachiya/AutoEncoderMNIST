@@ -96,7 +96,7 @@ nPlotImg = 10
 
 # ファイル名のpostFix
 if trainMode == ALOCC:
-	postFix = "_ALOCC_fc_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma)
+	postFix = "_ALOCC_fc_noiseStrip_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma)
 elif trainMode == ALDAD:
 	postFix = "_ALDAD_{}_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed,clusterNum)
 elif trainMode == ALDAD2:
@@ -354,9 +354,11 @@ predictFake_train = DNet(decoderR_train, keepProb=1.0)
 predictFake_train_aug = DNet(decoderR_train_aug, reuse=True, keepProb=1.0)
 predictTrue_train = DNet(xTrue,reuse=True, keepProb=1.0)
 
+'''
 # random encoder samples
 encoderR_sample = tf.random_normal(tf.stack([batchSize, z_dim_R]))
 lossMMD = compute_mmd(encoderR_sample, encoderR_train)
+'''
 	
 lossR = tf.reduce_mean(tf.square(decoderR_train - xTrue))
 lossRAll = tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + lambdaR * lossR
@@ -478,6 +480,8 @@ while not isStop:
 	# ノイズを追加する(ガウシアンノイズ)
 	# 正規分布に従う乱数を出力
 	batch_x_fake = batch_x + np.random.normal(0,noiseSigma,batch_x.shape)
+	batch_x[batch_x < 0] = 0
+	batch_x[batch_x > 255] = 255
 	#--------------
 
 	#==============
