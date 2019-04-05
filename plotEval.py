@@ -48,7 +48,8 @@ modelPath = 'models'
 logPath = 'logs'
 
 noiseSigmaEmbed = 3 
-noiseSigma = 0
+#noiseSigma = 0
+noiseSigma = 100
 
 ALOCC = 0
 ALDAD = 1
@@ -57,10 +58,10 @@ ALDAD3 = 3
 ALDAD4 = 4
 ALDAD5 = 5
 
-trainMode = 5
+trainMode = 0
 
 if trainMode == ALOCC:
-	postFixStr = 'ALOCC'
+	postFixStr = 'ALOCC_fc_noiseStrip'
 elif trainMode == ALDAD:
 	postFixStr = 'ALDAD'
 elif trainMode == ALDAD2:

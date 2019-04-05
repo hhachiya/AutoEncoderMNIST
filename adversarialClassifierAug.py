@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow.python.ops import nn_ops
 from tensorflow.examples.tutorials.mnist import input_data
 from sklearn.cluster import KMeans
+from sklearn.metrics import roc_auc_score
 import numpy as np
 import math, os
 import pickle
@@ -117,6 +118,9 @@ logPath = 'logs'
 #===========================
 # 評価値の計算用の関数
 def calcEval(predict, gt, threFake=0.5):
+
+	auc = roc_auc_score(gt, predict)
+
 	predict[predict >= threFake] = 1.
 	predict[predict < threFake] = 0.
 
@@ -127,7 +131,7 @@ def calcEval(predict, gt, threFake=0.5):
 	f1 = 2 * (precision * recall)/(precision + recall)
 	f1Neg = 2 * (precisionNeg * recallNeg)/(precisionNeg + recallNeg)
 
-	return recall, precision, f1, recallNeg, precisionNeg, f1Neg
+	return recall, precision, f1, recallNeg, precisionNeg, f1Neg, auc
 #===========================
 
 #===========================
@@ -181,6 +185,14 @@ def conv2d_t_relu(inputs, w, b, output_shape, stride):
 def conv2d_t(inputs, w, b, output_shape, stride):
 	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
 	return conv
+
+# 2d convolution with batch normalization
+def conv2d_bn_relu(inputs, w, b, ganma, beta, stride):
+        conv = tf.nn.conv2d(inputs, w, strides=stride, padding='SAME') + b
+        conv = batch_norm(conv,ganma,beta)
+        conv = tf.nn.relu(conv)
+        return conv
+
 	
 # fc layer with ReLU
 def fc_relu(inputs, w, b, keepProb=1.0):
@@ -216,7 +228,7 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 		# 28/2 = 14
 		convW1 = weight_variable("convW1", [3, 3, 1, 32])
 		convB1 = bias_variable("convB1", [32])
-		conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
+		conv1 = conv2d_bn_relu(x, convW1, convB1, stride=[1,2,2,1])
 		
 		# 14/2 = 7
 		convW2 = weight_variable("convW2", [3, 3, 32, 64])
@@ -438,9 +450,13 @@ fakeTestInds = np.setdiff1d(np.arange(len(myData.test.labels)),targetTestInds)
 recallDXs = [[] for tmp in np.arange(len(testFakeRatios))]
 precisionDXs = [[] for tmp in np.arange(len(testFakeRatios))]
 f1DXs = [[] for tmp in np.arange(len(testFakeRatios))]
+aucDXs = [[] for tmp in np.arange(len(testFakeRatios))]
+
 recallDRXs = [[] for tmp in np.arange(len(testFakeRatios))]
 precisionDRXs = [[] for tmp in np.arange(len(testFakeRatios))]
 f1DRXs = [[] for tmp in np.arange(len(testFakeRatios))]
+aucDRXs = [[] for tmp in np.arange(len(testFakeRatios))]
+
 recallDXsNeg = [[] for tmp in np.arange(len(testFakeRatios))]
 precisionDXsNeg = [[] for tmp in np.arange(len(testFakeRatios))]
 f1DXsNeg = [[] for tmp in np.arange(len(testFakeRatios))]
@@ -785,16 +801,18 @@ while not isStop:
 													
 			#--------------
 			# 評価値の計算と記録
-			recallDX, precisionDX, f1DX, recallDXNeg, precisionDXNeg, f1DXNeg = calcEval(predictDX_value[ind][:,0], test_y, threFake)
-			recallDRX, precisionDRX, f1DRX, recallDRXNeg, precisionDRXNeg, f1DRXNeg = calcEval(predictDRX_value[ind][:,0], test_y, threFake)
+			recallDX, precisionDX, f1DX, recallDXNeg, precisionDXNeg, f1DXNeg, aucDX = calcEval(predictDX_value[ind][:,0], test_y, threFake)
+			recallDRX, precisionDRX, f1DRX, recallDRXNeg, precisionDRXNeg, f1DRXNeg, aucDRX = calcEval(predictDRX_value[ind][:,0], test_y, threFake)
 		
 			recallDXs[ind].append(recallDX)
 			precisionDXs[ind].append(precisionDX)
 			f1DXs[ind].append(f1DX)
+			aucDXs[ind].append(aucDX)
 		
 			recallDRXs[ind].append(recallDRX)
 			precisionDRXs[ind].append(precisionDRX)
 			f1DRXs[ind].append(f1DRX)
+			aucDRXs[ind].append(aucDRX)
 
 			recallDXsNeg[ind].append(recallDXNeg)
 			precisionDXsNeg[ind].append(precisionDXNeg)
@@ -803,12 +821,13 @@ while not isStop:
 			recallDRXsNeg[ind].append(recallDRXNeg)
 			precisionDRXsNeg[ind].append(precisionDRXNeg)
 			f1DRXsNeg[ind].append(f1DRXNeg)
+
 			#--------------
 
 			#--------------
 			print("ratio:%f" % (testFakeRatio))
-			print("recallDX=%f, precisionDX=%f, f1DX=%f" % (recallDX, precisionDX, f1DX))
-			print("recallDRX=%f, precisionDRX=%f, f1DRX=%f" % (recallDRX, precisionDRX, f1DRX))
+			print("recallDX=%f, precisionDX=%f, f1DX=%f, aucDX=%f" % (recallDX, precisionDX, f1DX, aucDX))
+			print("recallDRX=%f, precisionDRX=%f, f1DRX=%f, aucDRX=%f" % (recallDRX, precisionDRX, f1DRX, aucDRX))
 			print("recallDXNeg=%f, precisionDXNeg=%f, f1DXNeg=%f" % (recallDXNeg, precisionDXNeg, f1DXNeg))
 			print("recallDRXNeg=%f, precisionDRXNeg=%f, f1DRXNeg=%f" % (recallDRXNeg, precisionDRXNeg, f1DRXNeg))
 			#--------------
@@ -935,9 +954,11 @@ with open(path, "wb") as fp:
 	pickle.dump(recallDXs,fp)
 	pickle.dump(precisionDXs,fp)
 	pickle.dump(f1DXs,fp)
+	pickle.dump(aucDXs,fp)
 	pickle.dump(recallDRXs,fp)
 	pickle.dump(precisionDRXs,fp)
 	pickle.dump(f1DRXs,fp)	
+	pickle.dump(aucDRXs,fp)	
 	pickle.dump(lossR_values,fp)
 	pickle.dump(lossRAll_values,fp)
 	pickle.dump(lossD_values,fp)
