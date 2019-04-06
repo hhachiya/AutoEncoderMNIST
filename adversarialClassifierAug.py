@@ -41,7 +41,7 @@ if len(sys.argv) > 1:
 	if len(sys.argv) > 2:
 		targetChar = int(sys.argv[2])
 		trialNo = int(sys.argv[3])
-		noiseSigma = int(sys.argv[4])
+		noiseSigma = float(sys.argv[4])
 		z_dim_R = int(sys.argv[5])
 		nIte = int(sys.argv[6])
 	else:
@@ -142,6 +142,13 @@ def weight_variable(name, shape):
 def bias_variable(name, shape):
 	return tf.get_variable(name, shape, initializer=tf.constant_initializer(0.1))
 
+# batch normalization
+def batch_norm(inputs,ganma,beta):
+	mean ,var = tf.nn.moments(inputs,[0])
+	res = (inputs-mean)/(var+10e-8)**0.5
+	res = ganma*res+beta
+	return res
+	
 # 1D convolution layer
 def conv1d_relu(inputs, w, b, stride):
 	# tf.nn.conv1d(input,filter,strides,padding)
@@ -169,10 +176,22 @@ def conv2d_relu(inputs, w, b, stride):
 	conv = tf.nn.relu(conv)
 	return conv
 
+# 2d convolution with batch normalization
+def conv2d_bn_relu(inputs, w, b, gamma, beta, stride):
+	conv = tf.nn.conv2d(inputs, w, strides=stride, padding='SAME') + b
+	conv = batch_norm(conv,gamma,beta)
+	conv = tf.nn.relu(conv)
+	return conv
+
 # 2D deconvolution layer
 def conv2d_t_sigmoid(inputs, w, b, output_shape, stride):
 	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
 	conv = tf.nn.sigmoid(conv)
+	return conv
+
+# 2D deconvolution layer
+def conv2d_t(inputs, w, b, output_shape, stride):
+	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
 	return conv
 
 # 2D deconvolution layer
@@ -181,19 +200,20 @@ def conv2d_t_relu(inputs, w, b, output_shape, stride):
 	conv = tf.nn.relu(conv)
 	return conv
 
-# 2D deconvolution layer
-def conv2d_t(inputs, w, b, output_shape, stride):
+# 2d deconvolution with batch normalization
+def conv2d_t_bn_relu(inputs, w, b, gamma, beta, output_shape, stride):
 	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
+	conv = batch_norm(conv, gamma, beta)
+	conv = tf.nn.relu(conv)
 	return conv
 
-# 2d convolution with batch normalization
-def conv2d_bn_relu(inputs, w, b, ganma, beta, stride):
-        conv = tf.nn.conv2d(inputs, w, strides=stride, padding='SAME') + b
-        conv = batch_norm(conv,ganma,beta)
-        conv = tf.nn.relu(conv)
-        return conv
+# 2D deconvolution layer
+def conv2d_t_bn_sigmoid(inputs, w, b, gamma, beta, output_shape, stride):
+	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
+	conv = batch_norm(conv, gamma, beta)
+	conv = tf.nn.sigmoid(conv)
+	return conv
 
-	
 # fc layer with ReLU
 def fc_relu(inputs, w, b, keepProb=1.0):
 	fc = tf.matmul(inputs, w) + b
@@ -228,12 +248,24 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 		# 28/2 = 14
 		convW1 = weight_variable("convW1", [3, 3, 1, 32])
 		convB1 = bias_variable("convB1", [32])
-		conv1 = conv2d_bn_relu(x, convW1, convB1, stride=[1,2,2,1])
+		
+		# batch normalization
+		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
+		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
+		
+		#conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
+		conv1 = conv2d_bn_relu(x, convW1, convB1, bnGamma1, bnBeta1, stride=[1,2,2,1])
 		
 		# 14/2 = 7
 		convW2 = weight_variable("convW2", [3, 3, 32, 64])
 		convB2 = bias_variable("convB2", [64])
-		conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
+		
+		# batch normalization
+		bnGamma2 = weight_variable("bnGamma2",[7,7,64])
+		bnBeta2 = bias_variable("bnBeta2",[7,7,64])
+		
+		#conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
+		conv2 = conv2d_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, stride=[1,2,2,1])
 
 		#--------------
 		# 特徴マップをembeddingベクトルに変換
@@ -276,13 +308,26 @@ def decoderR(z,z_dim,reuse=False, keepProb = 1.0):
 		# 7 x 2 = 14
 		convW1 = weight_variable("convW1", [3, 3, 32, 64])
 		convB1 = bias_variable("convB1", [32])
-		conv1 = conv2d_t_relu(fc1, convW1, convB1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
+
+		# batch normalization
+		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
+		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
+		
+		#conv1 = conv2d_t_relu(fc1, convW1, convB1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
+		conv1 = conv2d_t_bn_relu(fc1, convW1, convB1, bnGamma1, bnBeta1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
 		
 		# 14 x 2 = 28
 		convW2 = weight_variable("convW2", [3, 3, 1, 32])
 		convB2 = bias_variable("convB2", [1])
-		output = conv2d_t_relu(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
+		
+		# batch normalization
+		bnGamma2 = weight_variable("bnGamma2",[28,28,1])
+		bnBeta2 = bias_variable("bnBeta2",[28,28,1])
+		
+		#output = conv2d_t_relu(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
+		#output = conv2d_t_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
 		#output = conv2d_t_sigmoid(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
+		output = conv2d_t_bn_sigmoid(conv1, convW2, convB2, bnGamma2, bnBeta2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
 		
 		return output
 #===========================
@@ -300,12 +345,24 @@ def DNet(x, z_dim=1, reuse=False, keepProb=1.0):
 		# 28/2 = 14
 		convW1 = weight_variable("convW1", [3, 3, 1, 32])
 		convB1 = bias_variable("convB1", [32])
-		conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
+
+		# batch normalization
+		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
+		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
+		
+		#conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
+		conv1 = conv2d_bn_relu(x, convW1, convB1, bnGamma1, bnBeta1, stride=[1,2,2,1])
 		
 		# 14/2 = 7
 		convW2 = weight_variable("convW2", [3, 3, 32, 32])
 		convB2 = bias_variable("convB2", [32])
-		conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
+		
+		# batch normalization
+		bnGamma2 = weight_variable("bnGamma2",[7,7,32])
+		bnBeta2 = bias_variable("bnBeta2",[7,7,32])
+		
+		#conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
+		conv2 = conv2d_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, stride=[1,2,2,1])
 
 		#--------------
 		# 特徴マップをembeddingベクトルに変換
@@ -427,7 +484,8 @@ sess.run(tf.global_variables_initializer())
 
 #--------------
 # MNISTのデータの取得
-myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
+#myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
+myData = input_data.read_data_sets("MNIST/",dtype=tf.float32)
 
 targetTrainInds = np.where(myData.train.labels == targetChar)[0]
 targetTrainData = myData.train.images[myData.train.labels == targetChar]
@@ -496,8 +554,10 @@ while not isStop:
 	# ノイズを追加する(ガウシアンノイズ)
 	# 正規分布に従う乱数を出力
 	batch_x_fake = batch_x + np.random.normal(0,noiseSigma,batch_x.shape)
+	
 	batch_x[batch_x < 0] = 0
-	batch_x[batch_x > 255] = 255
+	#batch_x[batch_x > 255] = 255
+	batch_x[batch_x > 1] = 1
 	#--------------
 
 	#==============
