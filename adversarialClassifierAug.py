@@ -253,8 +253,8 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
 		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
 		
-		#conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
-		conv1 = conv2d_bn_relu(x, convW1, convB1, bnGamma1, bnBeta1, stride=[1,2,2,1])
+		conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
+		#conv1 = conv2d_bn_relu(x, convW1, convB1, bnGamma1, bnBeta1, stride=[1,2,2,1])
 		
 		# 14/2 = 7
 		convW2 = weight_variable("convW2", [3, 3, 32, 64])
@@ -264,8 +264,8 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 		bnGamma2 = weight_variable("bnGamma2",[7,7,64])
 		bnBeta2 = bias_variable("bnBeta2",[7,7,64])
 		
-		#conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
-		conv2 = conv2d_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, stride=[1,2,2,1])
+		conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
+		#conv2 = conv2d_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, stride=[1,2,2,1])
 
 		#--------------
 		# 特徴マップをembeddingベクトルに変換
@@ -313,8 +313,8 @@ def decoderR(z,z_dim,reuse=False, keepProb = 1.0):
 		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
 		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
 		
-		#conv1 = conv2d_t_relu(fc1, convW1, convB1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
-		conv1 = conv2d_t_bn_relu(fc1, convW1, convB1, bnGamma1, bnBeta1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
+		conv1 = conv2d_t_relu(fc1, convW1, convB1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
+		#conv1 = conv2d_t_bn_relu(fc1, convW1, convB1, bnGamma1, bnBeta1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
 		
 		# 14 x 2 = 28
 		convW2 = weight_variable("convW2", [3, 3, 1, 32])
@@ -326,8 +326,8 @@ def decoderR(z,z_dim,reuse=False, keepProb = 1.0):
 		
 		#output = conv2d_t_relu(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
 		#output = conv2d_t_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
-		#output = conv2d_t_sigmoid(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
-		output = conv2d_t_bn_sigmoid(conv1, convW2, convB2, bnGamma2, bnBeta2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
+		output = conv2d_t_sigmoid(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
+		#output = conv2d_t_bn_sigmoid(conv1, convW2, convB2, bnGamma2, bnBeta2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
 		
 		return output
 #===========================
@@ -350,8 +350,8 @@ def DNet(x, z_dim=1, reuse=False, keepProb=1.0):
 		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
 		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
 		
-		#conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
-		conv1 = conv2d_bn_relu(x, convW1, convB1, bnGamma1, bnBeta1, stride=[1,2,2,1])
+		conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
+		#conv1 = conv2d_bn_relu(x, convW1, convB1, bnGamma1, bnBeta1, stride=[1,2,2,1])
 		
 		# 14/2 = 7
 		convW2 = weight_variable("convW2", [3, 3, 32, 32])
@@ -361,8 +361,8 @@ def DNet(x, z_dim=1, reuse=False, keepProb=1.0):
 		bnGamma2 = weight_variable("bnGamma2",[7,7,32])
 		bnBeta2 = bias_variable("bnBeta2",[7,7,32])
 		
-		#conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
-		conv2 = conv2d_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, stride=[1,2,2,1])
+		conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
+		#conv2 = conv2d_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, stride=[1,2,2,1])
 
 		#--------------
 		# 特徴マップをembeddingベクトルに変換
