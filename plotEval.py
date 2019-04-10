@@ -14,6 +14,8 @@ import sys
 z_dim_R = 100
 
 targetChars = [0,1,2,3,4,5,6,7,8,9]
+targetChars = [9]
+
 
 # Rの二乗誤差の重み係数
 lambdaR = 0.4
@@ -28,7 +30,8 @@ threFake = 0.5
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # trial numbers
-trialNos = [0,1,2]
+#trialNos = [0,1,2]
+trialNos = [0]
 
 nIte = 5000
 resInd = int((nIte-1)/1000)
@@ -47,9 +50,10 @@ visualPath = 'visualization'
 modelPath = 'models'
 logPath = 'logs'
 
-noiseSigmaEmbed = 3 
+noiseSigmaEmbed = 5
 #noiseSigma = 0
-noiseSigma = 100
+#noiseSigma = 100
+noiseSigma = 1.0
 
 ALOCC = 0
 ALDAD = 1
@@ -58,7 +62,7 @@ ALDAD3 = 3
 ALDAD4 = 4
 ALDAD5 = 5
 
-trainMode = 0
+trainMode = 5
 
 if trainMode == ALOCC:
 	postFixStr = 'ALOCC_fc_noiseStrip'
@@ -94,14 +98,17 @@ def loadParams(path):
 		recallDXs = pickle.load(fp)
 		precisionDXs = pickle.load(fp)
 		f1DXs = pickle.load(fp)
+		aucDXs = pickle.load(fp)
 		recallDRXs = pickle.load(fp)
 		precisionDRXs = pickle.load(fp)
-		f1DRXs = pickle.load(fp)	
+		f1DRXs = pickle.load(fp)
+		aucDRXs = pickle.load(fp)
 		lossR_values = pickle.load(fp)
 		lossRAll_values = pickle.load(fp)
 		lossD_values = pickle.load(fp)
 		params = pickle.load(fp)	
 
+		pdb.set_trace()
 		return recallDXs, precisionDXs, f1DXs, recallDRXs, precisionDRXs, f1DRXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value
 
 recallDXs = [[] for tmp in targetChars]
@@ -132,10 +139,9 @@ for targetChar in targetChars:
 		recallDXs_, precisionDXs_, f1DXs_, recallDRXs_, precisionDRXs_, f1DRXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_ = loadParams(path)
 		#--------------
 
-
 		#--------------
 		# 記録
-		recallDXs[targetChar].append(recallDXs_)	
+		recallDXs[targetChar].append(recallDXs_)
 		precisionDXs[targetChar].append(precisionDXs_)
 		f1DXs[targetChar].append(f1DXs_)
 		recallDRXs[targetChar].append(recallDRXs_)	
