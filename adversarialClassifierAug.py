@@ -71,6 +71,9 @@ lambdaR = 0.4
 lambdaSmall = 10e-8
 #lambdaSmall = 0.00001
 
+# stopping Qriteria
+stopTrainThre = 10e-8
+
 # テストデータにおける偽物の割合
 testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 
@@ -144,10 +147,8 @@ def bias_variable(name, shape):
 	return tf.get_variable(name, shape, initializer=tf.constant_initializer(0.1))
 
 # batch normalization
-def batch_norm(inputs,ganma,beta):
-	mean ,var = tf.nn.moments(inputs,[0])
-	res = (inputs-mean)/(var+10e-8)**0.5
-	res = ganma*res+beta
+def batch_norm(inputs,training, trainable=False):
+	res = tf.layers.batch_normalization(inputs, training=training, trainable=training)
 	return res
 	
 # 1D convolution layer
@@ -177,13 +178,6 @@ def conv2d_relu(inputs, w, b, stride):
 	conv = tf.nn.relu(conv)
 	return conv
 
-# 2d convolution with batch normalization
-def conv2d_bn_relu(inputs, w, b, gamma, beta, stride):
-	conv = tf.nn.conv2d(inputs, w, strides=stride, padding='SAME') + b
-	conv = batch_norm(conv,gamma,beta)
-	conv = tf.nn.relu(conv)
-	return conv
-
 # 2D deconvolution layer
 def conv2d_t_sigmoid(inputs, w, b, output_shape, stride):
 	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
@@ -199,20 +193,6 @@ def conv2d_t(inputs, w, b, output_shape, stride):
 def conv2d_t_relu(inputs, w, b, output_shape, stride):
 	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
 	conv = tf.nn.relu(conv)
-	return conv
-
-# 2d deconvolution with batch normalization
-def conv2d_t_bn_relu(inputs, w, b, gamma, beta, output_shape, stride):
-	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
-	conv = batch_norm(conv, gamma, beta)
-	conv = tf.nn.relu(conv)
-	return conv
-
-# 2D deconvolution layer
-def conv2d_t_bn_sigmoid(inputs, w, b, gamma, beta, output_shape, stride):
-	conv = tf.nn.conv2d_transpose(inputs, w, output_shape=output_shape, strides=stride, padding='SAME') + b
-	conv = batch_norm(conv, gamma, beta)
-	conv = tf.nn.sigmoid(conv)
 	return conv
 
 # fc layer with ReLU
@@ -234,13 +214,14 @@ def fc_sigmoid(inputs, w, b, keepProb=1.0):
 	fc = tf.nn.dropout(fc, keepProb)
 	fc = tf.nn.sigmoid(fc)
 	return fc
+
 #===========================
 
 #===========================
 # エンコーダ
 # 画像をz_dim次元のベクトルにエンコード
 # reuse=Trueで再利用できる（tf.variable_scope() は，変数の管理に用いるスコープ定義）
-def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
+def encoderR(x, z_dim, reuse=False, keepProb = 1.0, training=False):
 	with tf.variable_scope('encoderR') as scope:
 		if reuse:
 			scope.reuse_variables()
@@ -250,23 +231,15 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 		convW1 = weight_variable("convW1", [3, 3, 1, 32])
 		convB1 = bias_variable("convB1", [32])
 		
-		# batch normalization
-		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
-		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
-		
 		conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
-		#conv1 = conv2d_bn_relu(x, convW1, convB1, bnGamma1, bnBeta1, stride=[1,2,2,1])
+		conv1 = batch_norm(conv1, training)
 		
 		# 14/2 = 7
 		convW2 = weight_variable("convW2", [3, 3, 32, 64])
 		convB2 = bias_variable("convB2", [64])
 		
-		# batch normalization
-		bnGamma2 = weight_variable("bnGamma2",[7,7,64])
-		bnBeta2 = bias_variable("bnBeta2",[7,7,64])
-		
 		conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
-		#conv2 = conv2d_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, stride=[1,2,2,1])
+		conv2 = batch_norm(conv2, training)
 
 		#--------------
 		# 特徴マップをembeddingベクトルに変換
@@ -278,8 +251,8 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 		# 7 x 7 x 32 -> z-dim
 		fcW1 = weight_variable("fcW1", [conv2size, z_dim])
 		fcB1 = bias_variable("fcB1", [z_dim])
-		#fc1 = fc_relu(conv2, fcW1, fcB1, keepProb)
-		fc1 = fc(conv2, fcW1, fcB1, keepProb)
+		fc1 = fc_relu(conv2, fcW1, fcB1, keepProb)
+		#fc1 = fc(conv2, fcW1, fcB1, keepProb)
 		#--------------
 
 		return fc1
@@ -289,7 +262,7 @@ def encoderR(x, z_dim, reuse=False, keepProb = 1.0):
 # デコーダ
 # z_dim次元の画像にデコード
 # reuse=Trueで再利用できる（tf.variable_scope() は，変数の管理に用いるスコープ定義）
-def decoderR(z,z_dim,reuse=False, keepProb = 1.0):
+def decoderR(z,z_dim,reuse=False, keepProb = 1.0, training=False):
 	with tf.variable_scope('decoderR') as scope:
 		if reuse:
 			scope.reuse_variables()
@@ -310,25 +283,16 @@ def decoderR(z,z_dim,reuse=False, keepProb = 1.0):
 		convW1 = weight_variable("convW1", [3, 3, 32, 64])
 		convB1 = bias_variable("convB1", [32])
 
-		# batch normalization
-		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
-		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
-		
 		conv1 = conv2d_t_relu(fc1, convW1, convB1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
-		#conv1 = conv2d_t_bn_relu(fc1, convW1, convB1, bnGamma1, bnBeta1, output_shape=[batchSize,14,14,32], stride=[1,2,2,1])
+		conv1 = batch_norm(conv1, training)
 		
 		# 14 x 2 = 28
 		convW2 = weight_variable("convW2", [3, 3, 1, 32])
 		convB2 = bias_variable("convB2", [1])
 		
-		# batch normalization
-		bnGamma2 = weight_variable("bnGamma2",[28,28,1])
-		bnBeta2 = bias_variable("bnBeta2",[28,28,1])
-		
-		#output = conv2d_t_relu(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
-		#output = conv2d_t_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
-		output = conv2d_t_sigmoid(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
-		#output = conv2d_t_bn_sigmoid(conv1, convW2, convB2, bnGamma2, bnBeta2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
+		output = conv2d_t(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
+		#output = tf.nn.tanh(output)
+		output = tf.nn.relu(output)
 		
 		return output
 #===========================
@@ -337,7 +301,7 @@ def decoderR(z,z_dim,reuse=False, keepProb = 1.0):
 # D Network
 # 
 # reuse=Trueで再利用できる（tf.variable_scope() は，変数の管理に用いるスコープ定義）
-def DNet(x, z_dim=1, reuse=False, keepProb=1.0):
+def DNet(x, z_dim=1, reuse=False, keepProb=1.0, training=False):
 	with tf.variable_scope('DNet') as scope:
 		if reuse:
 			scope.reuse_variables()
@@ -347,23 +311,15 @@ def DNet(x, z_dim=1, reuse=False, keepProb=1.0):
 		convW1 = weight_variable("convW1", [3, 3, 1, 32])
 		convB1 = bias_variable("convB1", [32])
 
-		# batch normalization
-		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
-		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
-		
 		conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
-		#conv1 = conv2d_bn_relu(x, convW1, convB1, bnGamma1, bnBeta1, stride=[1,2,2,1])
+		conv1 = batch_norm(conv1, training)
 		
 		# 14/2 = 7
 		convW2 = weight_variable("convW2", [3, 3, 32, 32])
 		convB2 = bias_variable("convB2", [32])
 		
-		# batch normalization
-		bnGamma2 = weight_variable("bnGamma2",[7,7,32])
-		bnBeta2 = bias_variable("bnBeta2",[7,7,32])
-		
 		conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
-		#conv2 = conv2d_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, stride=[1,2,2,1])
+		conv2 = batch_norm(conv2, training) 
 
 		#--------------
 		# 特徴マップをembeddingベクトルに変換
@@ -385,7 +341,7 @@ def DNet(x, z_dim=1, reuse=False, keepProb=1.0):
 # C Network
 # 
 # reuse=Trueで再利用できる（tf.variable_scope() は，変数の管理に用いるスコープ定義）
-def CNet(x, z_dim=1, reuse=False, keepProb=1.0):
+def CNet(x, z_dim=1, reuse=False, keepProb=1.0, training=False):
 	with tf.variable_scope('CNet') as scope:
 		if reuse:
 			scope.reuse_variables()
@@ -395,23 +351,15 @@ def CNet(x, z_dim=1, reuse=False, keepProb=1.0):
 		convW1 = weight_variable("convW1", [3, 3, 1, 32])
 		convB1 = bias_variable("convB1", [32])
 
-		# batch normalization
-		bnGamma1 = weight_variable("bnGamma1",[14,14,32])
-		bnBeta1 = bias_variable("bnBeta1",[14,14,32])
-		
-		#conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
-		conv1 = conv2d_bn_relu(x, convW1, convB1, bnGamma1, bnBeta1, stride=[1,2,2,1])
+		conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
+		conv1 = batch_norm(conv1, training)
 		
 		# 14/2 = 7
 		convW2 = weight_variable("convW2", [3, 3, 32, 32])
 		convB2 = bias_variable("convB2", [32])
 		
-		# batch normalization
-		bnGamma2 = weight_variable("bnGamma2",[7,7,32])
-		bnBeta2 = bias_variable("bnBeta2",[7,7,32])
-		
-		#conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
-		conv2 = conv2d_bn_relu(conv1, convW2, convB2, bnGamma2, bnBeta2, stride=[1,2,2,1])
+		conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
+		conv2 = batch_norm(conv2, training)
 
 		#--------------
 		# 特徴マップをembeddingベクトルに変換
@@ -438,9 +386,9 @@ xTestNoise = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 encoderR_train_aug = tf.placeholder(tf.float32, shape=[None, z_dim_R])
 
 # 学習用
-encoderR_train = encoderR(xFake, z_dim_R, keepProb=1.0)
-decoderR_train = decoderR(encoderR_train, z_dim_R, keepProb=1.0)
-decoderR_train_aug = decoderR(encoderR_train_aug, z_dim_R, reuse=True, keepProb=1.0)
+encoderR_train = encoderR(xFake, z_dim_R, keepProb=1.0, training=True)
+decoderR_train = decoderR(encoderR_train, z_dim_R, keepProb=1.0, training=True)
+decoderR_train_aug = decoderR(encoderR_train_aug, z_dim_R, reuse=True, keepProb=1.0, training=False)
 
 # テスト用
 encoderR_test = encoderR(xTestNoise, z_dim_R, reuse=True, keepProb=1.0)
@@ -451,40 +399,47 @@ decoderR_test = decoderR(encoderR_test, z_dim_R, reuse=True, keepProb=1.0)
 # 損失関数の設定
 
 #学習用
-predictFake_train = DNet(decoderR_train, keepProb=1.0)
-predictFake_train_aug = DNet(decoderR_train_aug, reuse=True, keepProb=1.0)
-predictTrue_train = DNet(xTrue,reuse=True, keepProb=1.0)
+predictFake_train = DNet(decoderR_train, keepProb=0.8, training=True)
+predictTrue_train = DNet(xTrue,reuse=True, keepProb=0.8, training=True)
+#predictFake_train_aug = DNet(decoderR_train_aug, reuse=True, keepProb=0.8, training=True)
 
-predictNormal_train = CNet(xTrue,keepProb=1.0)
-predictAbnormal_train = CNet(decoderR_train_aug,reuse=True, keepProb=1.0)
+predictNormal_train = CNet(xTrue, keepProb=0.8, training=True)
+predictAbnormal_train = CNet(decoderR_train_aug, reuse=True, keepProb=0.8, training=True)
 
 lossR = tf.reduce_mean(tf.square(decoderR_train - xTrue))
 lossRAll = tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + lambdaR * lossR
-lossRAll_aug = tf.reduce_mean(tf.log(predictFake_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train_aug +  lambdaSmall)) + lambdaR*lossR
+#lossRAll_aug = tf.reduce_mean(tf.log(predictFake_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train_aug +  lambdaSmall)) + lambdaR*lossR
 
 lossD = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train +  lambdaSmall))
-lossD_aug = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train_aug +  lambdaSmall))
-lossD_aug2 = tf.reduce_mean(tf.log(predictTrue_train + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train_aug +  lambdaSmall))
+#lossD_aug = tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train_aug +  lambdaSmall))
+#lossD_aug2 = tf.reduce_mean(tf.log(predictTrue_train + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictFake_train_aug +  lambdaSmall))
 
-lossC = tf.reduce_mean(tf.log(predictNormal_train  + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictAbnormal_train +  lambdaSmall))
-
-# R & Dの変数
-Rvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="encoderR") + tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="decoderR")
-Dvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="DNet")
-Cvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="CNet")
+lossC = tf.reduce_mean(tf.log(predictAbnormal_train + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictNormal_train + lambdaSmall))
+#lossC = tf.reduce_mean(tf.log(predictNormal_train + lambdaSmall)) + tf.reduce_mean(tf.log(1 - predictAbnormal_train + lambdaSmall))
 
 #--------------
 # ランダムシードの設定
 tf.set_random_seed(0)
 #--------------
 
-trainerR = tf.train.AdamOptimizer(1e-3).minimize(lossR, var_list=Rvars)
-trainerRAll = tf.train.AdamOptimizer(1e-3).minimize(lossRAll, var_list=Rvars)
-trainerRAll_aug = tf.train.AdamOptimizer(1e-3).minimize(lossRAll_aug, var_list=Rvars)
-trainerD = tf.train.AdamOptimizer(1e-3).minimize(-lossD, var_list=Dvars)
-trainerD_aug = tf.train.AdamOptimizer(1e-3).minimize(-lossD_aug, var_list=Dvars)
-trainerD_aug2 = tf.train.AdamOptimizer(1e-3).minimize(-lossD_aug2, var_list=Dvars)
-trainerC = tf.train.AdamOptimizer(1e-3).minimize(-lossC, var_list=Cvars)
+extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope="encoderR") + tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope="decoderR")
+with tf.control_dependencies(extra_update_ops):
+	Rvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="encoderR") + tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="decoderR")
+	trainerR = tf.train.AdamOptimizer(1e-3).minimize(lossR, var_list=Rvars)
+	trainerRAll = tf.train.AdamOptimizer(1e-3).minimize(lossRAll, var_list=Rvars)
+	#trainerRAll_aug = tf.train.AdamOptimizer(1e-3).minimize(lossRAll_aug, var_list=Rvars)
+
+extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope="DNet")
+with tf.control_dependencies(extra_update_ops):
+	Dvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="DNet")
+	trainerD = tf.train.AdamOptimizer(1e-3).minimize(-lossD, var_list=Dvars)
+	#trainerD_aug = tf.train.AdamOptimizer(1e-3).minimize(-lossD_aug, var_list=Dvars)
+	#trainerD_aug2 = tf.train.AdamOptimizer(1e-3).minimize(-lossD_aug2, var_list=Dvars)
+
+extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope="CNet")
+with tf.control_dependencies(extra_update_ops):
+	Cvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="CNet")
+	trainerC = tf.train.AdamOptimizer(1e-3).minimize(-lossC, var_list=Cvars)
 
 '''
 optimizer = tf.train.AdamOptimizer()
@@ -522,8 +477,8 @@ sess.run(tf.global_variables_initializer())
 
 #--------------
 # MNISTのデータの取得
-#myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
-myData = input_data.read_data_sets("MNIST/",dtype=tf.float32)
+myData = input_data.read_data_sets("MNIST/",dtype=tf.uint8)
+#myData = input_data.read_data_sets("MNIST/",dtype=tf.float32)
 
 targetTrainInds = np.where(myData.train.labels == targetChar)[0]
 targetTrainData = myData.train.images[myData.train.labels == targetChar]
@@ -598,8 +553,8 @@ while not isStop:
 	batch_x_fake = batch_x + np.random.normal(0,noiseSigma,batch_x.shape)
 	
 	batch_x[batch_x < 0] = 0
-	#batch_x[batch_x > 255] = 255
-	batch_x[batch_x > 1] = 1
+	batch_x[batch_x > 255] = 255
+	#batch_x[batch_x > 1] = 1
 	#--------------
 
 	#==============
@@ -649,9 +604,9 @@ while not isStop:
 		#------------
 
 
-		_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
-										[trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
-										feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
+		#_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
+										#[trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
+										#feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
 
 		# Re-training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
@@ -684,9 +639,9 @@ while not isStop:
 		#------------
 
 
-		_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
-										[trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
-										feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
+		#_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
+										#[trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
+										#feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
 
 		# Re-training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
@@ -712,9 +667,9 @@ while not isStop:
 		aug_z = np.matmul(randZ, np.diag(maxZ-minZ)*noiseSigmaEmbed) + ((maxZ-minZ)-(maxZ-minZ)*noiseSigmaEmbed)/2
 		#------------
 
-		_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
-										[trainerD_aug2, lossD_aug2, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
-										feed_dict={xTrue: batch_x, xFake:batch_x_fake, encoderR_train_aug: aug_z})
+		#_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
+										#[trainerD_aug2, lossD_aug2, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
+										#feed_dict={xTrue: batch_x, xFake:batch_x_fake, encoderR_train_aug: aug_z})
 
 		# Re-training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
@@ -780,9 +735,9 @@ while not isStop:
 		aug_z = np.array([encoderR_train_value[ind] + np.multiply(np.random.randn(augNtimes,z_dim_R),np.tile(std*noiseSigmaEmbed,[augNtimes,1])) for ind in np.arange(batchSize)])
 		aug_z = np.reshape(aug_z,[-1,z_dim_R])
 
-		_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
-										[trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
-										feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
+		#_, lossD_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
+		#								[trainerD_aug, lossD_aug, predictFake_train_aug, predictTrue_train, decoderR_train_aug],
+		#								feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
 
 		# Re-training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
@@ -792,57 +747,69 @@ while not isStop:
 
 	#==============
 	# TRIPLEの学習
-	elif (trainMode == TRIPLE) & isTrain:
+	elif (trainMode == TRIPLE):
 
-		augNtimes = 3
-
+		aug_z = np.zeros([1,100])
 		# training R network with batch_x & batch_x_fake
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+										#feed_dict={xTrue: batch_x, xFake: batch_x_fake, encoderR_train_aug: aug_z})
 										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
 
 		# training D network with batch_x & batch_x_fake
 		_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 										[trainerD, lossD, predictFake_train, predictTrue_train],
-										feed_dict={xTrue: batch_x,xFake: batch_x_fake})
+										#feed_dict={xTrue: batch_x, xFake: batch_x_fake, encoderR_train_aug: aug_z})
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+
+		augNtimes = 3
 
 		std = np.std(encoderR_train_value,axis=0)
 		aug_z = np.array([encoderR_train_value[ind] + np.multiply(np.random.randn(augNtimes,z_dim_R),np.tile(std*noiseSigmaEmbed,[augNtimes,1])) for ind in np.arange(batchSize)])
 		aug_z = np.reshape(aug_z,[-1,z_dim_R])
 
-		_, lossC_value, predictFake_train_value, predictTrue_train_value, decoderR_train_aug_value = sess.run(
+		#aug_z = encoderR_train_value + np.random.normal(0,noiseSigmaEmbed,encoderR_train_value.shape)
+
+		_, lossC_value, predictAbnormal_train_value, predictNormal_train_value, decoderR_train_aug_value = sess.run(
 										[trainerC, lossC, predictAbnormal_train, predictNormal_train, decoderR_train_aug],
 										feed_dict={xTrue: batch_x, encoderR_train_aug: aug_z})
 
 		# Re-training R with batch_x
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
-										feed_dict={xTrue: batch_x, xFake: batch_x_fake})
+										#feed_dict={xTrue: batch_x, xFake: batch_x_fake, encoderR_train_aug: aug_z}) 
+										feed_dict={xTrue: batch_x, xFake: batch_x_fake}) 
 	#==============
 
 	# もし誤差が下がらない場合は終了
-	if (ite > 2000) & (lossD_value < -10):
-		isTrain = False
+	if (ite > 2000):
+		tmp_lossD_values = np.array(lossD_values)
+		meanErrorDiff = np.mean(np.abs(tmp_lossD_values[-100:]-tmp_lossD_values[-101:-1]))
+		if meanErrorDiff < stopTrainThre:
+			isTrain = False
 
 	if ite >= nIte:
 		isStop = True
-		
-			
 	#==============
 
 	# 損失の記録
 	lossR_values.append(lossR_value)
 	lossRAll_values.append(lossRAll_value)
 	lossD_values.append(lossD_value)	
-	lossC_values.append(lossC_value)
+
+	if (trainMode >= TRIPLE):
+		lossC_values.append(lossC_value)
 	
 	if ite%100 == 0:
-		print("#%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f, lossC=%f" % (ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value, lossC_value))
+		if (trainMode >= TRIPLE):
+			print("#%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f, lossC=%f" % (ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value, lossC_value))
+		else:
+			print("#%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f" % (ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value))
 	#--------------
 
 	#--------------
 	# テスト
-	if (ite % 100 == 0):
+	if (ite % 1000 == 0):
 		
 		if isVisualize:
 			plt.close()
@@ -891,20 +858,25 @@ while not isStop:
 
 		
 		print("min:{}, max:{}".format(np.min(predictTrue_train_value),np.max(predictTrue_train_value)))
-		threFake = np.min(predictTrue_train_value)
-	
-		
+
 		predictDX_value = [[] for tmp in np.arange(len(testFakeRatios))]
 		predictDRX_value = [[] for tmp in np.arange(len(testFakeRatios))]
-		predictCX_value = [[] for tmp in np.arange(len(testFakeRatios))]
-		predictCRX_value = [[] for tmp in np.arange(len(testFakeRatios))]
 		decoderR_test_value = [[] for tmp in np.arange(len(testFakeRatios))]
 		encoderR_test_value = [[] for tmp in np.arange(len(testFakeRatios))]
+		
+
+		if (trainMode >= TRIPLE):
+			print("min:{}, max:{}".format(np.min(predictAbnormal_train_value),np.max(predictAbnormal_train_value)))
+			predictCX_value = [[] for tmp in np.arange(len(testFakeRatios))]
+			predictCRX_value = [[] for tmp in np.arange(len(testFakeRatios))]
+
+		#threFake = np.min(predictTrue_train_value)
+		#threFake = np.max(predictTrue_train_value)
+		#threFake = np.min(predictAbnormal_train_value)
 		
 		#--------------
 		# テストデータの作成	
 		for ind, testFakeRatio in enumerate(testFakeRatios):
-		
 			# データの数
 			fakeNum = int(np.floor(len(targetTestInds)*testFakeRatio))
 			targetNum = len(targetTestInds) - fakeNum
@@ -919,11 +891,13 @@ while not isStop:
 			# reshape & concat
 			test_x = np.reshape(myData.test.images[targetTestIndsSelected],(len(targetTestIndsSelected),28,28,1))
 			test_x_fake = np.reshape(myData.test.images[fakeTestIndsSelected],(len(fakeTestIndsSelected),28,28,1))
-			test_x = np.vstack([test_x, test_x_fake])
+			#test_x = np.vstack([test_x, test_x_fake])
+			test_x = np.vstack([test_x_fake, test_x])
 
 			# add noise
 			test_x_noise = test_x + np.random.normal(0,noiseSigma,test_x.shape)
-			test_y = np.hstack([np.ones(len(targetTestIndsSelected)),np.zeros(len(fakeTestIndsSelected))])
+			#test_y = np.hstack([np.ones(len(targetTestIndsSelected)),np.zeros(len(fakeTestIndsSelected))])
+			test_y = np.hstack([np.ones(len(fakeTestIndsSelected)),np.zeros(len(targetTestIndsSelected))])
 
 			if trainMode == ALOCC:
 				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind], encoderR_test_value[ind] = sess.run(
@@ -939,8 +913,8 @@ while not isStop:
 													feed_dict={xTest: test_x, xTestNoise: test_x_noise})
 			#--------------
 			# 評価値の計算と記録
-			recallDX, precisionDX, f1DX, aucDX = calcEval(predictDX_value[ind][:,0], test_y, threFake)
-			recallDRX, precisionDRX, f1DRX, aucDRX = calcEval(predictDRX_value[ind][:,0], test_y, threFake)
+			recallDX, precisionDX, f1DX, aucDX = calcEval(1-predictDX_value[ind][:,0], test_y, threFake)
+			recallDRX, precisionDRX, f1DRX, aucDRX = calcEval(1-predictDRX_value[ind][:,0], test_y, threFake)
 			
 			recallDXs[ind].append(recallDX)
 			precisionDXs[ind].append(precisionDX)
@@ -954,7 +928,6 @@ while not isStop:
 
 			
 			if trainMode >= TRIPLE:
-				pdb.set_trace()
 				recallCX, precisionCX, f1CX, aucCX = calcEval(predictCX_value[ind][:,0], test_y, threFake)
 				recallCRX, precisionCRX, f1CRX, aucCRX = calcEval(predictCRX_value[ind][:,0], test_y, threFake)
 
@@ -1045,13 +1018,13 @@ while not isStop:
 				#--------------
 				# 評価画像のうち正常のものを保存
 				path = os.path.join(visualPath,"img_test_true_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
-				plotImg(test_x[:nPlotImg], decoderR_test_value[ind][:nPlotImg],path)
+				plotImg(test_x[-nPlotImg:], decoderR_test_value[ind][-nPlotImg:],path)
 				#--------------
 		
 				#--------------
 				# 評価画像のうち異常のものを保存
 				path = os.path.join(visualPath,"img_test_fake_{}_{}_{}.png".format(postFix,testFakeRatio,ite))
-				plotImg(test_x[-nPlotImg:], decoderR_test_value[ind][-nPlotImg:],path)
+				plotImg(test_x[:nPlotImg], decoderR_test_value[ind][:nPlotImg],path)
 				#--------------
 		
 			if isVisualize & (z_dim_R == 2):
@@ -1107,15 +1080,24 @@ with open(path, "wb") as fp:
 	pickle.dump(precisionDRXs,fp)
 	pickle.dump(f1DRXs,fp)
 	pickle.dump(aucDRXs,fp)
-	pickle.dump(f1CXs,fp)
-	pickle.dump(aucCXs,fp)
-	pickle.dump(recallCRXs,fp)
-	pickle.dump(precisionCRXs,fp)
-	pickle.dump(f1CRXs,fp)
-	pickle.dump(aucCRXs,fp)	
+
+	if trainMode >= TRIPLE:
+		pickle.dump(recallCXs,fp)
+		pickle.dump(precisionCXs,fp)
+		pickle.dump(f1CXs,fp)
+		pickle.dump(aucCXs,fp)
+		pickle.dump(recallCRXs,fp)
+		pickle.dump(precisionCRXs,fp)
+		pickle.dump(f1CRXs,fp)
+		pickle.dump(aucCRXs,fp)	
+
 	pickle.dump(lossR_values,fp)
 	pickle.dump(lossRAll_values,fp)
 	pickle.dump(lossD_values,fp)
+
+	if trainMode >= TRIPLE:
+		pickle.dump(lossC_values,fp)
+
 	pickle.dump(params,fp)
 
 
