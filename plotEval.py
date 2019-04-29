@@ -11,78 +11,50 @@ import sys
 
 #===========================
 # パラメータの設定
-z_dim_R = 10
 
-#targetChars = [0,1,2,3,4,5,6,7,8,9]
-targetChars = [0,1,2,3,4]
-
-
-# Rの二乗誤差の重み係数
-lambdaR = 0.4
-
-# log(0)と0割防止用
-lambdaSmall = 0.00001
-
-# 予測結果に対する閾値
-threFake = 0.5
-
-# テストデータにおける偽物の割合
-testFakeRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
+#-------------
+z_dim_R = 100
+trainMode = 0
+augRatio = 1
+noiseSigma = 0.5
 
 # trial numbers
 trialNos = [0]
 
+# Iteration
 nIte = 10000
 resInd = int((nIte-1)/1000)
+#-------------
 
-# クラスタ数
-clusterNum = 10
+#-------------
+# Characters
+targetChars = [0,1,2,3,4,5,6,7,8,9]
 
+# テストデータにおける偽物の割合
+testAbnormalRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
+#-------------
 
-# Rの二乗誤差の閾値
-threSquaredLoss = 200
-
-# バッチデータ数
-batch_size = 300
-
-visualPath = 'visualization'
-modelPath = 'models'
+#-------------
+# Path
 logPath = 'logs'
 
-noiseSigmaEmbed = 0.1
-#noiseSigmaEmbed = 5
-noiseSigma = 0.0
-
+# Methods
 ALOCC = 0
-ALDAD = 1
-ALDAD2 = 2
-ALDAD3 = 3
-ALDAD4 = 4
-ALDAD5 = 5
-TRIPLE = 6
+TRIPLE = 1
+#-------------
 
-trainMode = 0
-
+#-------------
+# methods
 if trainMode == ALOCC:
-	postFixStr = 'ALOCC_fc_noiseStrip'
-elif trainMode == ALDAD:
-	postFixStr = 'ALDAD'
-elif trainMode == ALDAD2:
-	postFixStr = 'ALDAD2'
-elif trainMode == ALDAD3:
-	postFixStr = 'ALDAD3'
-elif trainMode == ALDAD4:
-	postFixStr = 'ALDAD4'
-elif trainMode == ALDAD5:
-	postFixStr = 'ALDAD5_fc'
+	postFixStr = 'ALOCC'
 elif trainMode == TRIPLE:
 	postFixStr = 'TRIPLE'
+#-------------
 
 #===========================
 
 #===========================
 # load data
-
 def loadParams(path):
 	with open(path, "rb") as fp:
 		batch_x = pickle.load(fp)
@@ -96,6 +68,7 @@ def loadParams(path):
 		decoderR_test_value = pickle.load(fp)
 		predictX_value = pickle.load(fp)
 		predictRX_value = pickle.load(fp)
+
 		recallXs = pickle.load(fp)
 		precisionXs = pickle.load(fp)
 		f1Xs = pickle.load(fp)
@@ -121,11 +94,19 @@ def loadParams(path):
 
 		if trainMode >= TRIPLE:
 			lossC_values = pickle.load(fp)
+			lossA_values = pickle.load(fp)
+			decoderR_train_abnormal_value = pickle.load(fp)
+		else:
+			lossC_values = []
+			lossA_values = []
+			decoderR_train_abnormal_value = []
 
 		params = pickle.load(fp)	
 
-		return recallXs, precisionXs, f1Xs, aucXs, recallRXs, precisionRXs, f1RXs, aucRXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value
+		return recallXs, precisionXs, f1Xs, aucXs, recallRXs, precisionRXs, f1RXs, aucRXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value, lossC_values, lossA_values
+#===========================
 
+#===========================
 recallXs = [[] for tmp in targetChars]
 precisionXs = [[] for tmp in targetChars]
 f1Xs = [[] for tmp in targetChars]
@@ -138,24 +119,26 @@ lossR_values = [[] for tmp in targetChars]
 lossRAll_values = [[] for tmp in targetChars]
 lossD_values = [[] for tmp in targetChars]
 lossC_values = [[] for tmp in targetChars]
+lossA_values = [[] for tmp in targetChars]
 maxInds = [[] for tmp in targetChars]
+#===========================
 
+#===========================
+# load pickles
 for targetChar in targetChars:
 	for trialNo in trialNos:
 		# ファイル名のpostFix
-
 		if trainMode == ALOCC:
 			postFix = "_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma)
-		elif trainMode > ALOCC:
-			#postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed)
-			postFix = "_{}_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, noiseSigmaEmbed, clusterNum)
+		elif trainMode == TRIPLE:
+			postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, augRatio)
 
 
 		#--------------
 		# pickleから読み込み
 		path = os.path.join(logPath,"log{}.pickle".format(postFix))
 
-		recallXs_, precisionXs_, f1Xs_, aucXs_, recallRXs_, precisionRXs_, f1RXs_, aucRXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_ = loadParams(path)
+		recallXs_, precisionXs_, f1Xs_, aucXs_, recallRXs_, precisionRXs_, f1RXs_, aucRXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_, lossC_values_, lossA_values_ = loadParams(path)
 		#--------------
 
 		#--------------
@@ -171,15 +154,18 @@ for targetChar in targetChars:
 		lossR_values[targetChar].append(lossR_values_)
 		lossRAll_values[targetChar].append(lossRAll_values_)
 		lossD_values[targetChar].append(lossD_values_)
+		lossC_values[targetChar].append(lossC_values_)
+		lossA_values[targetChar].append(lossA_values_)
 		#--------------
 
 	#--------------
 	# 最大のlossDに対応するF1 score 
-	#maxInds[targetChar] = np.argmax(np.array(lossD_values[targetChar])[:,nIte-1])
 	maxInds[targetChar] = np.argmax(np.array(f1Xs[targetChar])[:,-1,resInd])
 	#--------------
 #===========================
 
+#===========================
+# average evaluation
 recalls = [[] for tmp in np.arange(len(targetChars))]
 precisions = [[] for tmp in np.arange(len(targetChars))]
 f1s = [[] for tmp in np.arange(len(targetChars))]
@@ -190,7 +176,6 @@ f1sR = [[] for tmp in np.arange(len(targetChars))]
 aucsR = [[] for tmp in np.arange(len(targetChars))]
 
 for targetChar in targetChars:
-
 	recalls_ = np.array(recallXs[targetChar][maxInds[targetChar]])[:,resInd]
 	precisions_ = np.array(precisionXs[targetChar][maxInds[targetChar]])[:,resInd]
 	f1s_ = np.array(f1Xs[targetChar][maxInds[targetChar]])[:,resInd]
@@ -217,7 +202,10 @@ recall_meanR = np.mean(np.array(recallsR),axis=0)
 precision_meanR = np.mean(np.array(precisionsR),axis=0)
 f1_meanR = np.mean(np.array(f1sR),axis=0)
 auc_meanR = np.mean(np.array(aucsR),axis=0)
+#===========================
 
+#===========================
+# print 
 print("recall:",recall_mean)
 print("precision:",precision_mean)
 print("f1_mean:",f1_mean)
@@ -227,5 +215,6 @@ print("recall R:",recall_meanR)
 print("precision R:",precision_meanR)
 print("f1 R:",f1_meanR)
 print("auc R:",auc_meanR)
+#===========================
 
 pdb.set_trace()
