@@ -28,43 +28,40 @@ isEmbedSampling = True
 isTrain = True
 isVisualize = True
 
-if len(sys.argv) > 1:
-	# 文字の種類
-	trainMode = int(sys.argv[1])
+# 文字の種類
+trainMode = int(sys.argv[1])
 
-	# trail no.
-	if len(sys.argv) > 2:
-		targetChar = int(sys.argv[2])
-		trialNo = int(sys.argv[3])
-		noiseSigma = float(sys.argv[4])
-		z_dim_R = int(sys.argv[5])
-		nIte = int(sys.argv[6])
-	else:
-		targetChar = 0
-		trialNo = 0	
-		noiseSigma = 40
-		z_dim_R = 2
-		nIte = 5000
+augRatio = 1
+stopTrainThre = 0.01
 
-	if len(sys.argv) > 7:
-		augRatio = int(sys.argv[7])
-	else:
-		augRatio = 1
-
+# trail no.
+if len(sys.argv) > 2:
+	targetChar = int(sys.argv[2])
+	trialNo = int(sys.argv[3])
+	noiseSigma = float(sys.argv[4])
+	z_dim_R = int(sys.argv[5])
+	nIte = int(sys.argv[6])
 else:
-	# 方式の種類
-	trainMode = TRIPLE
+	targetChar = 0
+	trialNo = 0	
+	noiseSigma = 40
+	z_dim_R = 2
+	nIte = 5000
+
+if len(sys.argv) > 7:
+	if trainMode == TRIPLE: # augment data
+		augRatio = int(sys.argv[7])
+
+	elif trainMode == ALOCC: # stopping Qriteria
+		stopTrainThre = float(sys.argv[7])
 
 	
 
 # Rの二乗誤差の重み係数
-lambdaR = 0.8
+alpha = 0.2
 
 # log(0)と0割防止用
-lambdaSmall = 10e-8
-
-# stopping Qriteria
-stopTrainThre = 10e-8
+lambdaSmall = 10e-10
 
 # テストデータにおける偽物の割合
 testAbnormalRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
@@ -79,7 +76,7 @@ threLossR = 50
 threLossD = -10e-8
 
 # 変数をまとめたディクショナリ
-params = {'z_dim_R':z_dim_R, 'testAbnormalRatios':testAbnormalRatios, 'labmdaR':lambdaR,
+params = {'z_dim_R':z_dim_R, 'testAbnormalRatios':testAbnormalRatios, 'labmdaR':alpha,
 'threAbnormal':threAbnormal, 'targetChar':targetChar,'batchSize':batchSize}
 
 # プロットする画像数
@@ -87,9 +84,11 @@ nPlotImg = 10
 
 # ファイル名のpostFix
 if trainMode == ALOCC:
-	postFix = "_ALOCC_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma)
+	trainModeStr = 'ALOCC'	
+	postFix = "_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre)
 elif trainMode == TRIPLE:
-	postFix = "_TRIPLE_{}_{}_{}_{}_{}".format(targetChar, trialNo, z_dim_R, noiseSigma, augRatio)
+	trainModeStr = 'TRIPLE'	
+	postFix = "_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, augRatio)
 
 visualPath = 'visualization/'
 modelPath = 'models/'
@@ -102,8 +101,9 @@ def calcEval(predict, gt, threAbnormal=0.5):
 
 	auc = roc_auc_score(gt, predict)
 
-	predict[predict >= threAbnormal] = 1.
-	predict[predict < threAbnormal] = 0.
+	tmp_predict = np.zeros_like(predict)
+	tmp_predict[predict >= threAbnormal] = 1.
+	tmp_predict[predict < threAbnormal] = 0.
 
 	recall = np.sum(predict[gt==1])/np.sum(gt==1)
 	precision = np.sum(predict[gt==1])/np.sum(predict==1)
@@ -297,12 +297,16 @@ def decoderR(z,z_dim,reuse=False, keepProb = 1.0, training=False):
 		convB2 = bias_variable("convB2", [1])
 		output = conv2d_t(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
 
+		'''
 		if trainMode == ALOCC:
 			output = tf.nn.tanh(output)
 		else:
 			#output = tf.nn.relu(output)
 			output = tf.nn.sigmoid(output)
 		
+		'''
+		output = tf.nn.sigmoid(output)
+
 		return output
 #######################
 
@@ -346,10 +350,11 @@ def DNet(x, out_dim=1, reuse=False, keepProb=1.0, training=False):
 		# 100 -> out_dim
 		fcW2 = weight_variable("fcW2", [hidden_dim, out_dim])
 		fcB2 = bias_variable("fcB2", [out_dim])
-		fc2 = fc_sigmoid(fc1, fcW2, fcB2, keepProb)
+		fc2 = fc(fc1, fcW2, fcB2, keepProb)
+		fc2_sigmoid = tf.nn.sigmoid(fc2)
 		#=======================
 
-		return fc2
+		return fc2, fc2_sigmoid
 #######################
 
 #######################
@@ -396,10 +401,11 @@ def CNet(x, out_dim=1, reuse=False, keepProb=1.0, training=False):
 		# 100 -> out_dim
 		fcW2 = weight_variable("fcW2", [hidden_dim, out_dim])
 		fcB2 = bias_variable("fcB2", [out_dim])
-		fc2 = fc_sigmoid(fc1, fcW2, fcB2, keepProb)
+		fc2 = fc(fc1, fcW2, fcB2, keepProb)
+		fc2_sigmoid = tf.nn.sigmoid(fc2)
 		#=======================
 
-		return fc2
+		return fc2, fc2_sigmoid
 #######################
 
 #######################
@@ -452,11 +458,11 @@ decoderR_test = decoderR(encoderR_test, z_dim_R, reuse=True, keepProb=1.0)
 #######################
 # 学習用
 
-predictFake_train = DNet(decoderR_train, keepProb=keepProbTrain, training=True)
-predictTrue_train = DNet(xTrain,reuse=True, keepProb=keepProbTrain, training=True)
+predictFake_logit_train, predictFake_train  = DNet(decoderR_train, keepProb=keepProbTrain, training=True)
+predictTrue_logit_train, predictTrue_train = DNet(xTrain,reuse=True, keepProb=keepProbTrain, training=True)
 
-predictNormal_train = CNet(xTrain, keepProb=keepProbTrain, training=True)
-predictAbnormal_train = CNet(decoderR_train_abnormal, reuse=True, keepProb=keepProbTrain, training=True)
+predictNormal_logit_train, predictNormal_train = CNet(xTrain, keepProb=keepProbTrain, training=True)
+predictAbnormal_logit_train, predictAbnormal_train = CNet(decoderR_train_abnormal, reuse=True, keepProb=keepProbTrain, training=True)
 #######################
 
 #######################
@@ -466,13 +472,26 @@ predictAbnormal_train = CNet(decoderR_train_abnormal, reuse=True, keepProb=keepP
 #====================
 # R networks
 lossR = tf.reduce_mean(tf.square(decoderR_train - xTrain))
-lossRAll = -tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + lambdaR * lossR
+lossRAll = -tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + alpha * lossR
+'''
+lossR = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=decoderR_train, labels=xTrain))
+lossRAll = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictFake_logit_train, labels=tf.zeros_like(predictFake_logit_train))) + alpha * lossR
+'''
 #====================
 
 #====================
 # D and C Networks
 lossD = -tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) - tf.reduce_mean(tf.log(1 - predictFake_train +  lambdaSmall))
 lossC = -tf.reduce_mean(tf.log(predictAbnormal_train + lambdaSmall)) - tf.reduce_mean(tf.log(1 - predictNormal_train + lambdaSmall))
+'''
+lossDTrue = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictTrue_logit_train, labels=tf.ones_like(predictTrue_logit_train))) 
+lossDFake= tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictFake_logit_train, labels=tf.zeros_like(predictFake_logit_train))) 
+lossD = lossDTrue + lossDFake
+
+lossCAbnormal = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictAbnormal_logit_train, labels=tf.ones_like(predictAbnormal_logit_train))) 
+lossCNormal = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictNormal_logit_train, labels=tf.zeros_like(predictNormal_logit_train))) 
+lossC = lossCAbnormal + lossCNormal
+'''
 #====================
 
 #====================
@@ -480,6 +499,7 @@ lossC = -tf.reduce_mean(tf.log(predictAbnormal_train + lambdaSmall)) - tf.reduce
 decoderSize = np.prod(decoderR_train.get_shape().as_list()[1:])
 diff = tf.norm(tf.reshape(decoderR_train_abnormal,[-1,decoderSize]) - tf.tile(tf.reshape(decoderR_train,[-1,decoderSize]),[augRatio,1]), axis=1)/decoderSize
 mean, var = tf.nn.moments(tf.reshape(decoderR_train_abnormal,[-1,decoderSize]),axes=[0])
+#lossA = tf.reduce_mean(predictAbnormal_train) + tf.reduce_mean(tf.exp(-diff)) + tf.reduce_mean(tf.exp(-var))
 lossA = tf.reduce_mean(predictAbnormal_train) + tf.reduce_mean(tf.exp(-diff)) + tf.reduce_mean(tf.exp(-var))
 #====================
 #######################
@@ -531,10 +551,10 @@ trainerC = optimizer.apply_gradients(capped_gvsC)
 
 #######################
 #テスト用
-predictDX = DNet(xTest,reuse=True, keepProb=1.0)
-predictDRX = DNet(decoderR_test,reuse=True, keepProb=1.0)
-predictCX = CNet(xTest,reuse=True, keepProb=1.0)
-predictCRX = CNet(decoderR_test,reuse=True, keepProb=1.0)
+predictDX_logit, predictDX = DNet(xTest,reuse=True, keepProb=1.0)
+predictDRX_logit, predictDRX = DNet(decoderR_test,reuse=True, keepProb=1.0)
+predictCX_logit, predictCX = CNet(xTest,reuse=True, keepProb=1.0)
+predictCRX_logit, predictCRX = CNet(decoderR_test,reuse=True, keepProb=1.0)
 #######################
 
 #######################
@@ -573,11 +593,13 @@ recallDXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 precisionDXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 f1DXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 aucDXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
+aucDXs_inv = [[] for tmp in np.arange(len(testAbnormalRatios))]
 
 recallDRXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 precisionDRXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 f1DRXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 aucDRXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
+aucDRXs_inv = [[] for tmp in np.arange(len(testAbnormalRatios))]
 
 recallCXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 precisionCXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
@@ -622,7 +644,7 @@ while not isStop:
 
 	#=======================
 	# ALOCC(Adversarially Learned One-Class Classifier)の学習
-	if (trainMode == ALOCC) & isTrain:
+	if (trainMode == ALOCC and isTrain):
 
 
 		# training R network with batch_x & batch_x_noise
@@ -672,11 +694,8 @@ while not isStop:
 
 	#=======================
 	# もし誤差が下がらない場合は終了
-	if (ite > 2000):
-		tmp_lossD_values = np.array(lossD_values)
-		meanErrorDiff = np.mean(np.abs(tmp_lossD_values[-100:]-tmp_lossD_values[-101:-1]))
-		if meanErrorDiff < stopTrainThre:
-			isTrain = False
+	if lossR_value < stopTrainThre:
+		isTrain = False
 	#=======================
 
 
@@ -698,9 +717,9 @@ while not isStop:
 	
 	if ite%100 == 0:
 		if (trainMode == TRIPLE):
-			print("#%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f, lossC=%f, lossA=%f" % (ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value, lossC_value, lossA_value))
+			print("%s: #%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f, lossC=%f, lossA=%f" % (trainModeStr, ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value, lossC_value, lossA_value))
 		else:
-			print("#%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f" % (ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value))
+			print("%s: #%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f" % (trainModeStr, ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value))
 	#====================
 
 	#######################
@@ -768,6 +787,7 @@ while not isStop:
 			# add noise
 			test_x_noise = test_x + np.random.normal(0,noiseSigma,test_x.shape)
 			test_y = np.hstack([np.ones(len(abnormalTestIndsSelected)),np.zeros(len(normalTestIndsSelected))])
+			test_y_inv = np.hstack([np.zeros(len(abnormalTestIndsSelected)),np.ones(len(normalTestIndsSelected))])
 
 			#--------------------------
 			if trainMode == ALOCC:
@@ -786,16 +806,22 @@ while not isStop:
 			# 評価値の計算と記録 D Network
 			recallDX, precisionDX, f1DX, aucDX = calcEval(1-predictDX_value[ind][:,0], test_y, threAbnormal)
 			recallDRX, precisionDRX, f1DRX, aucDRX = calcEval(1-predictDRX_value[ind][:,0], test_y, threAbnormal)
-			
+
+
+			recallDX_inv, precisionDX_inv, f1DX_inv, aucDX_inv = calcEval(predictDX_value[ind][:,0], test_y_inv, threAbnormal)
+			recallDRX_inv, precisionDRX_inv, f1DRX_inv, aucDRX_inv = calcEval(predictDRX_value[ind][:,0], test_y_inv, threAbnormal)
+
 			recallDXs[ind].append(recallDX)
 			precisionDXs[ind].append(precisionDX)
 			f1DXs[ind].append(f1DX)
 			aucDXs[ind].append(aucDX)
+			aucDXs_inv[ind].append(aucDX_inv)
 		
 			recallDRXs[ind].append(recallDRX)
 			precisionDRXs[ind].append(precisionDRX)
 			f1DRXs[ind].append(f1DRX)
 			aucDRXs[ind].append(aucDRX)
+			aucDRXs_inv[ind].append(aucDRX_inv)
 
 			# C Network
 			if trainMode >= TRIPLE:
@@ -815,8 +841,8 @@ while not isStop:
 
 			#--------------------------
 			print("ratio:%f" % (testAbnormalRatio))
-			print("recallDX=%f, precisionDX=%f, f1DX=%f, aucDX=%f" % (recallDX, precisionDX, f1DX, aucDX))
-			print("recallDRX=%f, precisionDRX=%f, f1DRX=%f, aucDRX=%f" % (recallDRX, precisionDRX, f1DRX, aucDRX))
+			print("recallDX=%f, precisionDX=%f, f1DX=%f, aucDX=%f, aucDX_inv=%f" % (recallDX, precisionDX, f1DX, aucDX, aucDX_inv))
+			print("recallDRX=%f, precisionDRX=%f, f1DRX=%f, aucDRX=%f, aucDRX_inv=%f" % (recallDRX, precisionDRX, f1DRX, aucDRX, aucDRX_inv))
 			
 			if trainMode >= TRIPLE:
 				print("recallCX=%f, precisionCX=%f, f1CX=%f, aucCX=%f" % (recallCX, precisionCX, f1CX, aucCX))
@@ -959,10 +985,12 @@ with open(path, "wb") as fp:
 	pickle.dump(precisionDXs,fp)
 	pickle.dump(f1DXs,fp)
 	pickle.dump(aucDXs,fp)
+	pickle.dump(aucDXs_inv,fp)
 	pickle.dump(recallDRXs,fp)
 	pickle.dump(precisionDRXs,fp)
 	pickle.dump(f1DRXs,fp)
 	pickle.dump(aucDRXs,fp)
+	pickle.dump(aucDRXs_inv,fp)
 
 	if trainMode >= TRIPLE:
 		pickle.dump(recallCXs,fp)
