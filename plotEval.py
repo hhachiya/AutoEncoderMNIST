@@ -13,11 +13,26 @@ import sys
 # パラメータの設定
 
 #-------------
-z_dim_R = 100
-trainMode = 0
-augRatio = 1
-noiseSigma = 0.155
-#noiseSigma = 0.0
+# Path
+logPath = 'logs'
+
+# Methods
+ALOCC = 0
+TRIPLE = 1
+#-------------
+
+#-------------
+
+trainMode = int(sys.argv[1])
+
+if trainMode == ALOCC:
+	noiseSigma = float(sys.argv[2])
+	stopTrainThre = float(sys.argv[3])
+	z_dim_R = int(sys.argv[4])
+elif trainMode == TRIPLE:
+	noiseSigma = float(sys.argv[2])
+	augRatio = int(sys.argv[3])
+	z_dim_R = int(sys.argv[4])
 
 # trial numbers
 trialNos = [0]
@@ -29,21 +44,12 @@ resInd = int((nIte-1)/1000)
 
 #-------------
 # Characters
-#targetChars = [0,1,2,3,4,5,6,7,8,9]
-targetChars = [0,1,2]
+targetChars = [0,1,2,3,4,5,6,7,8,9]
 
 # テストデータにおける偽物の割合
 testAbnormalRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 #-------------
 
-#-------------
-# Path
-logPath = 'logs'
-
-# Methods
-ALOCC = 0
-TRIPLE = 1
-#-------------
 
 #-------------
 # methods
@@ -157,7 +163,7 @@ for targetChar in targetChars:
 	for trialNo in trialNos:
 		# ファイル名のpostFix
 		if trainMode == ALOCC:
-			postFix = "_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma)
+			postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre)
 		elif trainMode == TRIPLE:
 			postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, augRatio)
 
@@ -312,7 +318,7 @@ print('==============')
 print("D Net")
 print("recall:",recallD_mean)
 print("precision:",precisionD_mean)
-print("f1_mean:",f1D_mean)
+print("f1:",f1D_mean)
 print("auc:",aucD_mean)
 print("auc_inv:",aucD_inv_mean)
 print('--------------')
@@ -329,8 +335,8 @@ if trainMode==TRIPLE:
 	print("C Net")
 	print("recall:",recallC_mean)
 	print("precision:",precisionC_mean)
-	print("f1_mean:",f1C_mean)
-	print("auc_mean:",aucC_mean)
+	print("f1:",f1C_mean)
+	print("auc:",aucC_mean)
 	print('--------------')
 
 	print("recall R:",recallCR_mean)
