@@ -21,7 +21,8 @@ keepProbTrain = 0.8
 
 # 学習モード
 ALOCC = 0
-TRIPLE = 1
+GAN = 1
+TRIPLE = 2
 
 isStop = False
 isEmbedSampling = True
@@ -55,7 +56,6 @@ if len(sys.argv) > 7:
 	elif trainMode == ALOCC: # stopping Qriteria
 		stopTrainThre = float(sys.argv[7])
 
-	
 
 # Rの二乗誤差の重み係数
 alpha = 0.2
@@ -86,6 +86,12 @@ nPlotImg = 10
 if trainMode == ALOCC:
 	trainModeStr = 'ALOCC'	
 	postFix = "_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre)
+
+elif trainMode == GAN:
+	trainModeStr = 'GAN'
+	pdb.set_trace()
+	postFix = "_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma)
+	
 elif trainMode == TRIPLE:
 	trainModeStr = 'TRIPLE'	
 	postFix = "_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, augRatio)
@@ -297,14 +303,6 @@ def decoderR(z,z_dim,reuse=False, keepProb = 1.0, training=False):
 		convB2 = bias_variable("convB2", [1])
 		output = conv2d_t(conv1, convW2, convB2, output_shape=[batchSize,28,28,1], stride=[1,2,2,1])
 
-		'''
-		if trainMode == ALOCC:
-			output = tf.nn.tanh(output)
-		else:
-			#output = tf.nn.relu(output)
-			output = tf.nn.sigmoid(output)
-		
-		'''
 		output = tf.nn.sigmoid(output)
 
 		return output
@@ -601,6 +599,11 @@ f1DRXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 aucDRXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 aucDRXs_inv = [[] for tmp in np.arange(len(testAbnormalRatios))]
 
+recallGXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
+precisionGXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
+f1GXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
+aucGXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
+
 recallCXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 precisionCXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
 f1CXs = [[] for tmp in np.arange(len(testAbnormalRatios))]
@@ -646,7 +649,6 @@ while not isStop:
 	# ALOCC(Adversarially Learned One-Class Classifier)の学習
 	if (trainMode == ALOCC and isTrain):
 
-
 		# training R network with batch_x & batch_x_noise
 		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
@@ -662,6 +664,24 @@ while not isStop:
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
+	#=======================
+	# GAN(Generative Adversarial Net)の学習
+	elif (trainMode == GAN):
+
+		# training R network with batch_x & batch_x_noise
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
+
+		# training D network with batch_x & batch_x_noise
+		_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
+									[trainerD, lossD, predictFake_train, predictTrue_train],
+									feed_dict={xTrain: batch_x,xTrainNoise: batch_x_noise})
+
+		# Re-training R network with batch_x & batch_x_noise
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 	#=======================
 
 	#=======================
@@ -742,7 +762,7 @@ while not isStop:
 			plt.imshow(decoderR_train_value[0,:,:,0],cmap="gray")
 			plt.savefig(visualPath+"x_reconstructed.eps")
 
-			if trainMode >= TRIPLE:	
+			if trainMode == TRIPLE:	
 				for i in np.arange(10):
 					plt.imshow(decoderR_train_abnormal_value[i,:,:,0],cmap="gray")
 					plt.savefig(visualPath+"x_aug_{}.eps".format(i))
@@ -758,8 +778,11 @@ while not isStop:
 		decoderR_test_value = [[] for tmp in np.arange(len(testAbnormalRatios))]
 		encoderR_test_value = [[] for tmp in np.arange(len(testAbnormalRatios))]
 		
+		if (trainMode == GAN):
+			print("min:{}, max:{}".format(np.min(predictAbnormal_train_value),np.max(predictAbnormal_train_value)))
+			predictCX_value = [[] for tmp in np.arange(len(testAbnormalRatios))]
 
-		if (trainMode >= TRIPLE):
+		if (trainMode == TRIPLE):
 			print("min:{}, max:{}".format(np.min(predictAbnormal_train_value),np.max(predictAbnormal_train_value)))
 			predictCX_value = [[] for tmp in np.arange(len(testAbnormalRatios))]
 			predictCRX_value = [[] for tmp in np.arange(len(testAbnormalRatios))]
@@ -794,7 +817,21 @@ while not isStop:
 				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind], encoderR_test_value[ind] = sess.run(
 								[predictDX, predictDRX, decoderR_test, encoderR_test],
 								feed_dict={xTest: test_x, xTestNoise: test_x})
-			elif trainMode >= TRIPLE:
+								
+			elif trainMode == GAN:
+				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind], encoderR_test_value[ind] = sess.run(
+								[predictDX, predictDRX, decoderR_test, encoderR_test],
+								feed_dict={xTest: test_x, xTestNoise: test_x})
+								
+				# difference between original and recovered data
+				dataSize = np.prod(test_x.shape()[1:])
+				predictGX_value = np.square(np.reshape(test_x,[-1,dataSize]) - np.reshape(decoderR_test_value[-1,dataSize]))
+				predictGX_value = dataSize - predictGX_value
+				
+				pdb.set_trace()
+								
+								
+			elif trainMode == TRIPLE:
 				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind], encoderR_test_value[ind] = sess.run(
 								[predictDX, predictDRX, decoderR_test, encoderR_test],
 								feed_dict={xTest: test_x, xTestNoise: test_x_noise})
@@ -822,9 +859,27 @@ while not isStop:
 			f1DRXs[ind].append(f1DRX)
 			aucDRXs[ind].append(aucDRX)
 			aucDRXs_inv[ind].append(aucDRX_inv)
+			#--------------------------
 
+			#--------------------------
+			# GAN
+			if trainMode == GAN:
+				recallGX, precisionGX, f1GX, aucGX = calcEval(predictGX_value[ind][:,0], test_y, threAbnormal)
+
+				recallGXs[ind].append(recallGX)
+				precisionGXs[ind].append(precisionGX)
+				f1GXs[ind].append(f1GX)
+				aucGXs[ind].append(aucGX)
+		
+				recallGRXs[ind].append(recallGRX)
+				precisionGRXs[ind].append(precisionGRX)
+				f1GRXs[ind].append(f1GRX)
+				aucGRXs[ind].append(aucGRX)
+			#--------------------------
+
+			#--------------------------
 			# C Network
-			if trainMode >= TRIPLE:
+			if trainMode == TRIPLE:
 				recallCX, precisionCX, f1CX, aucCX = calcEval(predictCX_value[ind][:,0], test_y, threAbnormal)
 				recallCRX, precisionCRX, f1CRX, aucCRX = calcEval(predictCRX_value[ind][:,0], test_y, threAbnormal)
 
@@ -844,13 +899,15 @@ while not isStop:
 			print("recallDX=%f, precisionDX=%f, f1DX=%f, aucDX=%f, aucDX_inv=%f" % (recallDX, precisionDX, f1DX, aucDX, aucDX_inv))
 			print("recallDRX=%f, precisionDRX=%f, f1DRX=%f, aucDRX=%f, aucDRX_inv=%f" % (recallDRX, precisionDRX, f1DRX, aucDRX, aucDRX_inv))
 			
-			if trainMode >= TRIPLE:
+			if trainMode == GAN:
+				print("recallGX=%f, precisionGX=%f, f1GX=%f, aucGX=%f" % (recallGX, precisionGX, f1GX, aucGX))
+
+			if trainMode == TRIPLE:
 				print("recallCX=%f, precisionCX=%f, f1CX=%f, aucCX=%f" % (recallCX, precisionCX, f1CX, aucCX))
 				print("recallCRX=%f, precisionCRX=%f, f1CRX=%f, aucCRX=%f" % (recallCRX, precisionCRX, f1CRX, aucCRX))
 			#--------------------------
 
 			if ind == 0:
-
 				#--------------------------
 				# 学習で用いている画像（元の画像、ノイズ付加した画像、decoderで復元した画像）を保存
 				plt.close()
@@ -912,7 +969,7 @@ while not isStop:
 				plt.plot(encoderR_train_value[:,0],encoderR_train_value[:,1],'o',markersize=6,markeredgecolor="b",markerfacecolor="w")
 				plt.plot(encoderR_train_value[:,0],encoderR_train_value[:,1],'d',markersize=6,markeredgecolor="g",markerfacecolor="w")
 
-				if trainMode >= TRIPLE:
+				if trainMode == TRIPLE:
 					plt.plot(encoderR_train_abnormal_value[:,0],encoderR_train_abnormal_value[:,1],'rd',markersize=6)
 
 					plt.xlim(int(np.min([np.min(encoderR_train_abnormal_value[:,0]), np.min(encoderR_train_value[:,0]),np.min(encoderR_train_value[:,0])]) - 100),
@@ -939,7 +996,7 @@ while not isStop:
 				plt.plot(encoderR_test_value[ind][:normalNum,0],encoderR_test_value[ind][:normalNum,1],'o',markersize=3,markeredgecolor="g",markerfacecolor="None")
 				plt.plot(encoderR_test_value[ind][normalNum:,0],encoderR_test_value[ind][normalNum:,1],'o',markersize=3,markeredgecolor="r",markerfacecolor="None")
 				
-				if trainMode > TRIPLE:
+				if trainMode == TRIPLE:
 					plt.plot(encoderR_train_abnormal_value[:,0],encoderR_train_abnormal_value[:,1],'.',markersize=2,markeredgecolor="m",markerfacecolor="None")
 					plt.xlim(int(np.min([np.min(encoderR_train_abnormal_value[:,0]), np.min(encoderR_test_value[ind][:,0]),np.min(encoderR_test_value[ind][:,0])]) - 100),
 						int(np.max([np.max(encoderR_train_abnormal_value[:,0]), np.max(encoderR_test_value[ind][:,0]),np.max(encoderR_test_value[ind][:,0])]) + 100) )
@@ -992,7 +1049,7 @@ with open(path, "wb") as fp:
 	pickle.dump(aucDRXs,fp)
 	pickle.dump(aucDRXs_inv,fp)
 
-	if trainMode >= TRIPLE:
+	if trainMode == TRIPLE:
 		pickle.dump(recallCXs,fp)
 		pickle.dump(precisionCXs,fp)
 		pickle.dump(f1CXs,fp)
@@ -1006,7 +1063,7 @@ with open(path, "wb") as fp:
 	pickle.dump(lossRAll_values,fp)
 	pickle.dump(lossD_values,fp)
 
-	if trainMode >= TRIPLE:
+	if trainMode == TRIPLE:
 		pickle.dump(lossC_values,fp)
 		pickle.dump(lossA_values,fp)
 		pickle.dump(decoderR_train_abnormal_value,fp)
