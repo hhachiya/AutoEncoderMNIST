@@ -33,7 +33,14 @@ isVisualize = True
 trainMode = int(sys.argv[1])
 
 augRatio = 1
+isANet = False
 stopTrainThre = 0.01
+
+# Rの二乗誤差の重み係数
+alpha = 0.2
+
+# lossAのCNetの重み係数
+beta = 1.0
 
 # trail no.
 if len(sys.argv) > 2:
@@ -51,14 +58,14 @@ else:
 
 if len(sys.argv) > 7:
 	if trainMode == TRIPLE: # augment data
-		augRatio = int(sys.argv[7])
+		stopTrainThre = float(sys.argv[7])
+		if int(sys.argv[8])==1:
+			isANet = True
+			
 
 	elif trainMode == ALOCC: # stopping Qriteria
 		stopTrainThre = float(sys.argv[7])
 
-
-# Rの二乗誤差の重み係数
-alpha = 0.2
 
 # log(0)と0割防止用
 lambdaSmall = 10e-10
@@ -89,12 +96,17 @@ if trainMode == ALOCC:
 
 elif trainMode == GAN:
 	trainModeStr = 'GAN'
-	pdb.set_trace()
 	postFix = "_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma)
 	
 elif trainMode == TRIPLE:
-	trainModeStr = 'TRIPLE'	
-	postFix = "_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, augRatio)
+	if isANet:
+		trainModeStr = 'TRIPLE_ANet'	
+		postFix = "_{}_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre, beta)
+	else:
+		trainModeStr = 'TRIPLE'
+		postFix = "_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre)
+
+
 
 visualPath = 'visualization/'
 modelPath = 'models/'
@@ -207,12 +219,25 @@ def fc_relu(inputs, w, b, keepProb=1.0):
 	fc = tf.nn.relu(fc)
 	return fc
 
+# fc layer with ReLU
+def fc_relu_nobias(inputs, w, keepProb=1.0):
+	fc = tf.nn.dropout(inputs, keepProb)
+	fc = tf.matmul(fc, w)
+	fc = tf.nn.relu(fc)
+	return fc
+
 # fc layer
 def fc(inputs, w, b, keepProb=1.0):
 	fc = tf.nn.dropout(inputs, keepProb)
 	fc = tf.matmul(fc, w) + b
 	return fc
-	
+
+# fc layer
+def fc_nobias(inputs, w, keepProb=1.0):
+	fc = tf.nn.dropout(inputs, keepProb)
+	fc = tf.matmul(fc, w)
+	return fc
+
 # fc layer with softmax
 def fc_sigmoid(inputs, w, b, keepProb=1.0):
 	fc = tf.nn.dropout(inputs, keepProb)
@@ -368,7 +393,6 @@ def CNet(x, out_dim=1, reuse=False, keepProb=1.0, training=False):
 		# 28/2 = 14
 		#convW1 = weight_variable("convW1", [3, 3, 1, 32])
 		convW1 = weight_variable("convW1", [3, 3, 1, 4])
-		#convB1 = bias_variable("convB1", [32])
 		convB1 = bias_variable("convB1", [4])
 
 		conv1 = conv2d_relu(x, convW1, convB1, stride=[1,2,2,1])
@@ -377,7 +401,6 @@ def CNet(x, out_dim=1, reuse=False, keepProb=1.0, training=False):
 		# 14/2 = 7
 		#convW2 = weight_variable("convW2", [3, 3, 32, 32])
 		convW2 = weight_variable("convW2", [3, 3, 4, 16])
-		#convB2 = bias_variable("convB2", [32])
 		convB2 = bias_variable("convB2", [16])
 		
 		conv2 = conv2d_relu(conv1, convW2, convB2, stride=[1,2,2,1])
@@ -415,22 +438,29 @@ def ANet(x, z_dim=1, reuse=False, keepProb=1.0, augRatio=1, training=False):
 		if reuse:
 			scope.reuse_variables()
 
+		'''
+
 		h_dim = int(z_dim/2)	
+
 		fcW1 = weight_variable("fcW1", [z_dim, h_dim])
-		fcB1 = bias_variable("fcB1", [h_dim])
-		fc1 = fc_relu(x, fcW1, fcB1, keepProb)
+		#fcB1 = bias_variable("fcB1", [h_dim])
+		#fc1 = fc_relu(x, fcW1, fcB1, keepProb)
+		fc1 = fc_relu_nobias(x, fcW1, keepProb)
 		fcW2 = weight_variable("fcW2", [h_dim, z_dim])
-		fcB2 = bias_variable("fcB2", [z_dim])
-		fc2 = fc(fc1, fcW2, fcB2, keepProb)
+		#fcB2 = bias_variable("fcB2", [z_dim])
+		#fc2 = fc(fc1, fcW2, fcB2, keepProb)
+		fc2 = fc_nobias(fc1, fcW2, keepProb)
+		'''
 
 		mean, var = tf.nn.moments(x, axes=[0])
 		sigmaD1 = tf.get_variable('sigmaD1', [z_dim], initializer=tf.constant_initializer(1.0))
 		gauss1 = tfd.MultivariateNormalDiag(loc=np.zeros(z_dim,dtype=np.float32), scale_diag=var*sigmaD1)
 		noise1 = gauss1.sample(batchSize*augRatio)
 
-		output = tf.tile(fc2,[augRatio,1]) + noise1
+		output = tf.tile(x,[augRatio,1]) + noise1
+		#output = tf.tile(fc2,[augRatio,1])
 
-		return output
+		return output, sigmaD1
 #######################
 
 #######################
@@ -445,8 +475,13 @@ xTestNoise = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 encoderR_train = encoderR(xTrainNoise, z_dim_R, keepProb=keepProbTrain, training=True)
 decoderR_train = decoderR(encoderR_train, z_dim_R, keepProb=keepProbTrain, training=True)
 
-encoderR_train_abnormal = ANet(encoderR_train, z_dim_R, keepProb=keepProbTrain, augRatio=augRatio, training=True)
-decoderR_train_abnormal = decoderR(encoderR_train_abnormal, z_dim_R, reuse=True, keepProb=1.0, training=False)
+mean, var = tf.nn.moments(encoderR_train, axes=[0])
+gauss1 = tfd.MultivariateNormalDiag(loc=np.zeros(z_dim_R,dtype=np.float32), scale_diag=tf.ones(z_dim_R))
+noise1 = gauss1.sample(batchSize)
+
+encoderR_train_abnormal, sigmaD1 = ANet(encoderR_train, z_dim_R, keepProb=keepProbTrain, augRatio=augRatio, training=True)
+encoderR_train_abnormal_noise  = encoderR_train + noise1
+decoderR_train_abnormal = decoderR(encoderR_train_abnormal_noise, z_dim_R, reuse=True, keepProb=1.0, training=False)
 
 # テスト用
 encoderR_test = encoderR(xTestNoise, z_dim_R, reuse=True, keepProb=1.0)
@@ -461,6 +496,7 @@ predictTrue_logit_train, predictTrue_train = DNet(xTrain,reuse=True, keepProb=ke
 
 predictNormal_logit_train, predictNormal_train = CNet(xTrain, keepProb=keepProbTrain, training=True)
 predictAbnormal_logit_train, predictAbnormal_train = CNet(decoderR_train_abnormal, reuse=True, keepProb=keepProbTrain, training=True)
+predictAbnormal_logit_train_orig, predictAbnormal_train_orig = CNet(decoderR_train, reuse=True, keepProb=keepProbTrain, training=True)
 #######################
 
 #######################
@@ -471,34 +507,73 @@ predictAbnormal_logit_train, predictAbnormal_train = CNet(decoderR_train_abnorma
 # R networks
 lossR = tf.reduce_mean(tf.square(decoderR_train - xTrain))
 lossRAll = -tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + alpha * lossR
-'''
-lossR = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=decoderR_train, labels=xTrain))
-lossRAll = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictFake_logit_train, labels=tf.zeros_like(predictFake_logit_train))) + alpha * lossR
-'''
 #====================
 
 #====================
 # D and C Networks
 lossD = -tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) - tf.reduce_mean(tf.log(1 - predictFake_train +  lambdaSmall))
-lossC = -tf.reduce_mean(tf.log(predictAbnormal_train + lambdaSmall)) - tf.reduce_mean(tf.log(1 - predictNormal_train + lambdaSmall))
-'''
-lossDTrue = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictTrue_logit_train, labels=tf.ones_like(predictTrue_logit_train))) 
-lossDFake= tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictFake_logit_train, labels=tf.zeros_like(predictFake_logit_train))) 
-lossD = lossDTrue + lossDFake
 
-lossCAbnormal = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictAbnormal_logit_train, labels=tf.ones_like(predictAbnormal_logit_train))) 
-lossCNormal = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictNormal_logit_train, labels=tf.zeros_like(predictNormal_logit_train))) 
-lossC = lossCAbnormal + lossCNormal
-'''
+if isANet:
+	#lossC =  -tf.reduce_mean(tf.log(predictAbnormal_train + lambdaSmall)) - tf.reduce_mean(tf.log(predictAbnormal_train_orig + lambdaSmall)) \
+	lossC =  -tf.reduce_mean(tf.log(predictAbnormal_train + lambdaSmall)) \
+	 		- tf.reduce_mean(tf.log(1 - predictNormal_train + lambdaSmall)) 
+else:
+	lossC = -tf.reduce_mean(tf.log(predictAbnormal_train_orig + lambdaSmall)) - tf.reduce_mean(tf.log(1 - predictNormal_train + lambdaSmall)) 
+
 #====================
 
 #====================
 # A Network
+#---------------
+# difference after decoding
 decoderSize = np.prod(decoderR_train.get_shape().as_list()[1:])
-diff = tf.norm(tf.reshape(decoderR_train_abnormal,[-1,decoderSize]) - tf.tile(tf.reshape(decoderR_train,[-1,decoderSize]),[augRatio,1]), axis=1)/decoderSize
-mean, var = tf.nn.moments(tf.reshape(decoderR_train_abnormal,[-1,decoderSize]),axes=[0])
-#lossA = tf.reduce_mean(predictAbnormal_train) + tf.reduce_mean(tf.exp(-diff)) + tf.reduce_mean(tf.exp(-var))
-lossA = tf.reduce_mean(predictAbnormal_train) + tf.reduce_mean(tf.exp(-diff)) + tf.reduce_mean(tf.exp(-var))
+
+# reshape
+xTrain_reshape = tf.reshape(xTrain,[-1,decoderSize])
+xTrain_reshape2 = tf.reshape(tf.tile(xTrain_reshape,[1,batchSize]),[batchSize**2,-1])
+decoderR_train_abnormal_reshape = tf.reshape(decoderR_train_abnormal,[-1,decoderSize]) 
+decoderR_train_abnormal_reshape1 = tf.tile(decoderR_train_abnormal_reshape,[batchSize,1])
+decoderR_train_abnormal_reshape2 = tf.reshape(tf.tile(decoderR_train_abnormal_reshape,[1,batchSize]),[batchSize**2,-1])
+
+# variance
+_, decoderR_train_abnormal_var = tf.nn.moments(decoderR_train_abnormal_reshape, axes=[0])
+
+# diff
+diff2xTrain_cross = tf.norm(xTrain_reshape2 - decoderR_train_abnormal_reshape1, axis=1)/decoderSize
+diff2xTrain = tf.norm(xTrain_reshape - decoderR_train_abnormal_reshape, axis=1)/decoderSize
+diffSelf_cross = tf.norm(decoderR_train_abnormal_reshape1 - decoderR_train_abnormal_reshape2, axis=1)/decoderSize
+
+'''
+lossA = -beta*tf.reduce_mean(tf.log(1-predictAbnormal_train + lambdaSmall)) - tf.reduce_mean(tf.log(diff2xTrain + lambdaSmall))\
+	 #- tf.reduce_mean(tf.log(decoderR_train_abnormal_var + lambdaSmall))\
+	 #+ tf.reduce_sum(tf.norm(ANet_fcW1,axis=0)) + tf.reduce_sum(tf.norm(ANet_fcW2,axis=0))
+'''
+#---------------
+
+#---------------
+# difference after encoding
+encoderSize = np.prod(encoderR_train.get_shape().as_list()[1:])
+
+# reshape
+encoderR_train_reshape = tf.reshape(encoderR_train,[-1,encoderSize])
+encoderR_train_reshape2 = tf.reshape(tf.tile(encoderR_train_reshape,[1,batchSize]),[batchSize**2,-1])
+encoderR_train_abnormal_reshape = tf.reshape(encoderR_train_abnormal,[-1,encoderSize]) 
+encoderR_train_abnormal_reshape1 = tf.tile(encoderR_train_abnormal_reshape,[batchSize,1])
+encoderR_train_abnormal_reshape2 = tf.reshape(tf.tile(encoderR_train_abnormal_reshape,[1,batchSize]),[batchSize**2,-1])
+
+# diff
+diff2xTrain_cross_encoder = tf.norm(encoderR_train_reshape2 - encoderR_train_abnormal_reshape1, axis=1)/encoderSize
+diff2xTrain_encoder = tf.norm(encoderR_train_reshape - encoderR_train_abnormal_reshape, axis=1)/encoderSize
+diffSelf_cross_encoder = tf.norm(encoderR_train_abnormal_reshape1 - encoderR_train_abnormal_reshape2, axis=1)/encoderSize
+
+# variance
+_, encoderR_train_abnormal_var = tf.nn.moments(encoderR_train_abnormal, axes=[0])
+
+lossA = -beta*tf.reduce_mean(tf.log(1-predictAbnormal_train + lambdaSmall)) - tf.reduce_mean(tf.log(diff2xTrain_encoder + lambdaSmall)) \
+	#- tf.reduce_mean(tf.log(encoderR_train_abnormal_var + lambdaSmall))\
+	#+ tf.reduce_sum(tf.norm(ANet_fcW1,axis=0)) + tf.reduce_sum(tf.norm(ANet_fcW2,axis=0))
+#---------------
+
 #====================
 #######################
 
@@ -520,6 +595,10 @@ extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope="CNet")
 with tf.control_dependencies(extra_update_ops):
 	Cvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="CNet")
 	trainerC = tf.train.AdamOptimizer(1e-3).minimize(lossC, var_list=Cvars)
+
+
+optimizer = tf.train.AdamOptimizer()
+gvsC = optimizer.compute_gradients(lossC, var_list=Cvars)
 
 extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope="ANet")
 with tf.control_dependencies(extra_update_ops):
@@ -647,10 +726,12 @@ while not isStop:
 
 	#=======================
 	# ALOCC(Adversarially Learned One-Class Classifier)の学習
-	if (trainMode == ALOCC and isTrain):
+	#if (trainMode == ALOCC and isTrain):
+	if (trainMode == ALOCC):
 
-		# training R network with batch_x & batch_x_noise
-		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+		if isTrain:
+			# training R network with batch_x & batch_x_noise
+			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
@@ -659,8 +740,9 @@ while not isStop:
 									[trainerD, lossD, predictFake_train, predictTrue_train],
 									feed_dict={xTrain: batch_x,xTrainNoise: batch_x_noise})
 
-		# Re-training R network with batch_x & batch_x_noise
-		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+		if isTrain:
+			# Re-training R network with batch_x & batch_x_noise
+			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
@@ -688,28 +770,32 @@ while not isStop:
 	# TRIPLEの学習
 	elif (trainMode == TRIPLE):
 
-		# training R network with batch_x & batch_x_noise
-		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+		if isTrain:
+			# training R network with batch_x & batch_x_noise
+			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
-		# training D network with batch_x & batch_x_noise
-		_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
+			# training D network with batch_x & batch_x_noise
+			_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 									[trainerD, lossD, predictFake_train, predictTrue_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
+
+			# training R network with batch_x & batch_x_noise
+			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
+
+		# training A network
+		#_, lossA_value, reshape1, reshape2, diff1, diff2 = sess.run([trainerA, lossA, decoderR_train_abnormal_reshape1, decoderR_train_abnormal_reshape2, decoderR_train_abnormal, diff2xTrain],feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
+		_, lossA_value, sigmaD1_value = sess.run([trainerA, lossA, sigmaD1],feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
 		# training C network 
 		_, lossC_value, predictAbnormal_train_value, predictNormal_train_value, decoderR_train_abnormal_value = sess.run(
 									[trainerC, lossC, predictAbnormal_train, predictNormal_train, decoderR_train_abnormal],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
-		# training A network
-		_, lossA_value, diff_value,var_value = sess.run([trainerA, lossA, diff,var],feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
-		# Re-training R with batch_x
-		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
-										[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
-										feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise}) 
 	#=======================
 
 	#=======================
@@ -735,6 +821,7 @@ while not isStop:
 		lossC_values.append(lossC_value)
 		lossA_values.append(lossA_value)
 	
+
 	if ite%100 == 0:
 		if (trainMode == TRIPLE):
 			print("%s: #%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f, lossC=%f, lossA=%f" % (trainModeStr, ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value, lossC_value, lossA_value))
@@ -746,6 +833,8 @@ while not isStop:
 	# Evaluation
 	if (ite % 1000 == 0):
 		
+		#print("{} {}".format(np.mean(diff1),np.mean(diff2)))
+
 		#====================
 		# training data
 		if isVisualize:
@@ -779,8 +868,7 @@ while not isStop:
 		encoderR_test_value = [[] for tmp in np.arange(len(testAbnormalRatios))]
 		
 		if (trainMode == GAN):
-			print("min:{}, max:{}".format(np.min(predictAbnormal_train_value),np.max(predictAbnormal_train_value)))
-			predictCX_value = [[] for tmp in np.arange(len(testAbnormalRatios))]
+			predictGX_value = [[] for tmp in np.arange(len(testAbnormalRatios))]
 
 		if (trainMode == TRIPLE):
 			print("min:{}, max:{}".format(np.min(predictAbnormal_train_value),np.max(predictAbnormal_train_value)))
@@ -824,12 +912,10 @@ while not isStop:
 								feed_dict={xTest: test_x, xTestNoise: test_x})
 								
 				# difference between original and recovered data
-				dataSize = np.prod(test_x.shape()[1:])
-				predictGX_value = np.square(np.reshape(test_x,[-1,dataSize]) - np.reshape(decoderR_test_value[-1,dataSize]))
-				predictGX_value = dataSize - predictGX_value
-				
-				pdb.set_trace()
-								
+				dataSize = np.prod(test_x.shape[1:])
+				predictGX_value[ind] = np.sum(np.abs(np.reshape(test_x,[-1,dataSize]) - np.reshape(decoderR_test_value[ind],[-1,dataSize])),axis=1)
+				predictGX_value[ind] = predictGX_value[ind]/dataSize
+
 								
 			elif trainMode == TRIPLE:
 				predictDX_value[ind], predictDRX_value[ind], decoderR_test_value[ind], encoderR_test_value[ind] = sess.run(
@@ -837,6 +923,8 @@ while not isStop:
 								feed_dict={xTest: test_x, xTestNoise: test_x_noise})
 
 				predictCX_value[ind], predictCRX_value[ind] = sess.run([predictCX, predictCRX], feed_dict={xTest: test_x, xTestNoise: test_x_noise})
+
+				pdb.set_trace()
 			#--------------------------
 
 			#--------------------------
@@ -864,17 +952,12 @@ while not isStop:
 			#--------------------------
 			# GAN
 			if trainMode == GAN:
-				recallGX, precisionGX, f1GX, aucGX = calcEval(predictGX_value[ind][:,0], test_y, threAbnormal)
+				recallGX, precisionGX, f1GX, aucGX = calcEval(predictGX_value[ind], test_y, threAbnormal)
 
 				recallGXs[ind].append(recallGX)
 				precisionGXs[ind].append(precisionGX)
 				f1GXs[ind].append(f1GX)
 				aucGXs[ind].append(aucGX)
-		
-				recallGRXs[ind].append(recallGRX)
-				precisionGRXs[ind].append(precisionGRX)
-				f1GRXs[ind].append(f1GRX)
-				aucGRXs[ind].append(aucGRX)
 			#--------------------------
 
 			#--------------------------
@@ -938,7 +1021,7 @@ while not isStop:
 
 				#--------------------------
 				# 提案法で生成した画像（元の画像、提案法で生成たい異常画像）を保存
-				if isEmbedSampling & (trainMode > ALOCC):
+				if isEmbedSampling & (trainMode == TRIPLE):
 					path = os.path.join(visualPath,"img_train_aug{}_{}_{}.png".format(postFix,testAbnormalRatio,ite))
 					plotImg(batch_x[:nPlotImg], decoderR_train_abnormal_value[:nPlotImg],path)
 				#--------------------------
@@ -1059,6 +1142,12 @@ with open(path, "wb") as fp:
 		pickle.dump(f1CRXs,fp)
 		pickle.dump(aucCRXs,fp)	
 
+	if trainMode == GAN:
+		pickle.dump(recallGXs,fp)
+		pickle.dump(precisionGXs,fp)
+		pickle.dump(f1GXs,fp)
+		pickle.dump(aucGXs,fp)
+		
 	pickle.dump(lossR_values,fp)
 	pickle.dump(lossRAll_values,fp)
 	pickle.dump(lossD_values,fp)

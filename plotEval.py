@@ -18,21 +18,33 @@ logPath = 'logs'
 
 # Methods
 ALOCC = 0
-TRIPLE = 1
+GAN = 1
+TRIPLE = 2
 #-------------
 
 #-------------
+isANet = False
 
 trainMode = int(sys.argv[1])
 
 if trainMode == ALOCC:
 	noiseSigma = float(sys.argv[2])
-	stopTrainThre = float(sys.argv[3])
-	z_dim_R = int(sys.argv[4])
+	z_dim_R = int(sys.argv[3])
+	stopTrainThre = float(sys.argv[4])
+elif trainMode == GAN:
+	noiseSigma = float(sys.argv[2])
+	z_dim_R = int(sys.argv[3])
 elif trainMode == TRIPLE:
 	noiseSigma = float(sys.argv[2])
-	augRatio = int(sys.argv[3])
-	z_dim_R = int(sys.argv[4])
+	z_dim_R = int(sys.argv[3])
+	stopTrainThre = float(sys.argv[4])
+	if len(sys.argv) > 5:
+		if int(sys.argv[5]) == 1:
+			isANet = True
+	
+
+# lossAのCNetの重み係数
+beta = 1.0
 
 # trial numbers
 trialNos = [0]
@@ -55,8 +67,13 @@ testAbnormalRatios = [0.1, 0.2, 0.3, 0.4, 0.5]
 # methods
 if trainMode == ALOCC:
 	postFixStr = 'ALOCC'
+elif trainMode == GAN:
+	postFixStr = 'GAN'
 elif trainMode == TRIPLE:
-	postFixStr = 'TRIPLE'
+	if isANet:
+		postFixStr = 'TRIPLE_ANet'
+	else:
+		postFixStr = 'TRIPLE'
 #-------------
 
 #===========================
@@ -88,7 +105,7 @@ def loadParams(path):
 		aucDRXs = pickle.load(fp)
 		aucDRXs_inv = pickle.load(fp)
 
-		if trainMode >= TRIPLE:
+		if trainMode == TRIPLE:
 			recallCXs = pickle.load(fp)
 			precisionCXs = pickle.load(fp)
 			f1CXs = pickle.load(fp)
@@ -106,13 +123,23 @@ def loadParams(path):
 			precisionCRXs = []
 			f1CRXs = []
 			aucCRXs = []
-	
+
+		if trainMode == GAN:
+			recallGXs = pickle.load(fp)
+			precisionGXs = pickle.load(fp)
+			f1GXs = pickle.load(fp)
+			aucGXs = pickle.load(fp)
+		else:
+			recallGXs = []
+			precisionGXs = []
+			f1GXs = []
+			aucGXs = []
 
 		lossR_values = pickle.load(fp)
 		lossRAll_values = pickle.load(fp)
 		lossD_values = pickle.load(fp)
 
-		if trainMode >= TRIPLE:
+		if trainMode == TRIPLE:
 			lossC_values = pickle.load(fp)
 			lossA_values = pickle.load(fp)
 			decoderR_train_abnormal_value = pickle.load(fp)
@@ -123,7 +150,7 @@ def loadParams(path):
 
 		params = pickle.load(fp)	
 
-		return recallDXs, precisionDXs, f1DXs, aucDXs, aucDXs_inv, recallDRXs, precisionDRXs, f1DRXs, aucDRXs, aucDRXs_inv, recallCXs, precisionCXs, f1CXs, aucCXs, recallCRXs, precisionCRXs, f1CRXs, aucCRXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value, lossC_values, lossA_values
+		return recallDXs, precisionDXs, f1DXs, aucDXs, aucDXs_inv, recallDRXs, precisionDRXs, f1DRXs, aucDRXs, aucDRXs_inv, recallCXs, precisionCXs, f1CXs, aucCXs, recallCRXs, precisionCRXs, f1CRXs, aucCRXs, recallGXs, precisionGXs, f1GXs, aucGXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value, lossC_values, lossA_values
 #===========================
 
 #===========================
@@ -138,6 +165,11 @@ precisionDRXs = [[] for tmp in targetChars]
 f1DRXs = [[] for tmp in targetChars]
 aucDRXs = [[] for tmp in targetChars]
 aucDRXs_inv = [[] for tmp in targetChars]
+
+recallGXs = [[] for tmp in targetChars]
+precisionGXs = [[] for tmp in targetChars]
+f1GXs = [[] for tmp in targetChars]
+aucGXs = [[] for tmp in targetChars]
 
 recallCXs = [[] for tmp in targetChars]
 precisionCXs = [[] for tmp in targetChars]
@@ -164,15 +196,20 @@ for targetChar in targetChars:
 		# ファイル名のpostFix
 		if trainMode == ALOCC:
 			postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre)
+		elif trainMode == GAN:
+			postFix = "_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma)
 		elif trainMode == TRIPLE:
-			postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, augRatio)
+			if isANet:
+				postFix = "_{}_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre, beta)
+			else:
+				postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre)
 
 
 		#--------------
 		# pickleから読み込み
 		path = os.path.join(logPath,"log{}.pickle".format(postFix))
 
-		recallDXs_, precisionDXs_, f1DXs_, aucDXs_, aucDXs_inv_, recallDRXs_, precisionDRXs_, f1DRXs_, aucDRXs_, aucDRXs_inv_, recallCXs_, precisionCXs_, f1CXs_, aucCXs_, recallCRXs_, precisionCRXs_, f1CRXs_, aucCRXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_, lossC_values_, lossA_values_ = loadParams(path)
+		recallDXs_, precisionDXs_, f1DXs_, aucDXs_, aucDXs_inv_, recallDRXs_, precisionDRXs_, f1DRXs_, aucDRXs_, aucDRXs_inv_, recallCXs_, precisionCXs_, f1CXs_, aucCXs_, recallCRXs_, precisionCRXs_, f1CRXs_, aucCRXs_, recallGXs_, precisionGXs_, f1GXs_, aucGXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_, lossC_values_, lossA_values_ = loadParams(path)
 		#--------------
 
 		#--------------
@@ -189,6 +226,12 @@ for targetChar in targetChars:
 		f1DRXs[targetChar].append(f1DRXs_)
 		aucDRXs[targetChar].append(aucDRXs_)
 		aucDRXs_inv[targetChar].append(aucDRXs_inv_)
+
+		# GAN
+		recallGXs[targetChar].append(recallGXs_)
+		precisionGXs[targetChar].append(precisionGXs_)
+		f1GXs[targetChar].append(f1GXs_)
+		aucGXs[targetChar].append(aucGXs_)
 
 		# C net
 		recallCXs[targetChar].append(recallCXs_)
@@ -229,10 +272,16 @@ f1sDR = [[] for tmp in np.arange(len(targetChars))]
 aucsDR = [[] for tmp in np.arange(len(targetChars))]
 aucsDR_inv = [[] for tmp in np.arange(len(targetChars))]
 
+recallsG = [[] for tmp in np.arange(len(targetChars))]
+precisionsG = [[] for tmp in np.arange(len(targetChars))]
+f1sG = [[] for tmp in np.arange(len(targetChars))]
+aucsG = [[] for tmp in np.arange(len(targetChars))]
+
 recallsC = [[] for tmp in np.arange(len(targetChars))]
 precisionsC = [[] for tmp in np.arange(len(targetChars))]
 f1sC = [[] for tmp in np.arange(len(targetChars))]
 aucsC = [[] for tmp in np.arange(len(targetChars))]
+
 recallsCR = [[] for tmp in np.arange(len(targetChars))]
 precisionsCR = [[] for tmp in np.arange(len(targetChars))]
 f1sCR = [[] for tmp in np.arange(len(targetChars))]
@@ -263,6 +312,18 @@ for targetChar in targetChars:
 	f1sDR[targetChar] = f1sDR_
 	aucsDR[targetChar] = aucsDR_
 	aucsDR_inv[targetChar] = aucsDR_inv_
+
+	# GAN
+	if trainMode == GAN:
+		recallsG_ = np.array(recallGXs[targetChar][maxInds[targetChar]])[:,resInd]
+		precisionsG_ = np.array(precisionGXs[targetChar][maxInds[targetChar]])[:,resInd]
+		f1sG_ = np.array(f1GXs[targetChar][maxInds[targetChar]])[:,resInd]
+		aucsG_ = np.array(aucGXs[targetChar][maxInds[targetChar]])[:,resInd]
+
+		recallsG[targetChar] = recallsG_
+		precisionsG[targetChar] = precisionsG_
+		f1sG[targetChar] = f1sG_
+		aucsG[targetChar] = aucsG_
 
 	# C net
 	if trainMode == TRIPLE:
@@ -297,6 +358,13 @@ f1DR_mean = np.mean(np.array(f1sDR),axis=0)
 aucDR_mean = np.mean(np.array(aucsDR),axis=0)
 aucDR_inv_mean = np.mean(np.array(aucsDR_inv),axis=0)
 
+# GAN
+if trainMode==GAN:
+	recallG_mean = np.mean(np.array(recallsG),axis=0)
+	precisionG_mean = np.mean(np.array(precisionsG),axis=0)
+	f1G_mean = np.mean(np.array(f1sG),axis=0)
+	aucG_mean = np.mean(np.array(aucsG),axis=0)
+
 # C net
 if trainMode==TRIPLE:
 	recallC_mean = np.mean(np.array(recallsC),axis=0)
@@ -328,6 +396,16 @@ print("f1 R:",f1DR_mean)
 print("auc R:",aucDR_mean)
 print("auc_inv R:",aucDR_inv_mean)
 print('==============')
+
+# GAN
+if trainMode==GAN:
+	print('==============')
+	print("GAN")
+	print("recall:",recallG_mean)
+	print("precision:",precisionG_mean)
+	print("f1:",f1G_mean)
+	print("auc:",aucG_mean)
+	print('==============')
 
 # C net
 if trainMode==TRIPLE:
