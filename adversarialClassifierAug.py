@@ -33,7 +33,6 @@ isVisualize = True
 trainMode = int(sys.argv[1])
 
 augRatio = 1
-isANet = False
 stopTrainThre = 0.01
 
 # Rの二乗誤差の重み係数
@@ -59,11 +58,7 @@ else:
 if len(sys.argv) > 7:
 	if trainMode == TRIPLE: # augment data
 		stopTrainThre = float(sys.argv[7])
-
-		if int(sys.argv[8])==1:
-			isANet = True
-		else:
-			isANet = False
+		beta = float(sys.argv[8])
 			
 
 	elif trainMode == ALOCC: # stopping Qriteria
@@ -102,12 +97,8 @@ elif trainMode == GAN:
 	postFix = "_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma)
 	
 elif trainMode == TRIPLE:
-	if isANet:
-		trainModeStr = 'TRIPLE_ANet'	
-		postFix = "_{}_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre, beta)
-	else:
-		trainModeStr = 'TRIPLE'
-		postFix = "_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre)
+	trainModeStr = 'TRIPLE'
+	postFix = "_{}_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre, beta)
 
 
 
@@ -446,7 +437,7 @@ encoderR_train = encoderR(xTrainNoise, z_dim_R, keepProb=keepProbTrain, training
 decoderR_train = decoderR(encoderR_train, z_dim_R, keepProb=keepProbTrain, training=True)
 
 # ノイズの付加
-encoderR_train_abnormal = encoderR_train + zTrainNoise
+encoderR_train_abnormal = encoderR_train + beta*zTrainNoise
 
 decoderR_train_abnormal = decoderR(encoderR_train_abnormal, z_dim_R, reuse=True, keepProb=1.0, training=False)
 
@@ -464,10 +455,7 @@ _, predictTrue_train = DNet(xTrain,reuse=True, keepProb=keepProbTrain, training=
 
 _, predictNormal_train = CNet(xTrain, keepProb=keepProbTrain, training=True)
 
-if isANet:
-	_, predictAbnormal_train = CNet(decoderR_train_abnormal, reuse=True, keepProb=keepProbTrain, training=True)
-else:
-	_, predictAbnormal_train = CNet(decoderR_train, reuse=True, keepProb=keepProbTrain, training=True)
+_, predictAbnormal_train = CNet(decoderR_train_abnormal, reuse=True, keepProb=keepProbTrain, training=True)
 #######################
 
 #######################
