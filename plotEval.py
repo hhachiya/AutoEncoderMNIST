@@ -38,9 +38,10 @@ elif trainMode == TRIPLE:
 	noiseSigma = float(sys.argv[2])
 	z_dim_R = int(sys.argv[3])
 	stopTrainThre = float(sys.argv[4])
-	if len(sys.argv) > 5:
-		if int(sys.argv[5]) == 1:
-			isANet = True
+	if int(sys.argv[5]) == 1:
+		isANet = True
+	else:
+		isANet = False
 	
 
 # lossAのCNetの重み係数
@@ -141,11 +142,9 @@ def loadParams(path):
 
 		if trainMode == TRIPLE:
 			lossC_values = pickle.load(fp)
-			lossA_values = pickle.load(fp)
 			decoderR_train_abnormal_value = pickle.load(fp)
 		else:
 			lossC_values = []
-			lossA_values = []
 			decoderR_train_abnormal_value = []
 
 		params = pickle.load(fp)	

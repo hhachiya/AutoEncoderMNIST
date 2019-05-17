@@ -631,12 +631,10 @@ while not isStop:
 
 	#=======================
 	# ALOCC(Adversarially Learned One-Class Classifier)の学習
-	#if (trainMode == ALOCC and isTrain):
-	if (trainMode == ALOCC):
+	if (trainMode == ALOCC and isTrain):
 
-		if isTrain:
-			# training R network with batch_x & batch_x_noise
-			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+		# training R network with batch_x & batch_x_noise
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
@@ -645,9 +643,8 @@ while not isStop:
 									[trainerD, lossD, predictFake_train, predictTrue_train],
 									feed_dict={xTrain: batch_x,xTrainNoise: batch_x_noise})
 
-		if isTrain:
-			# Re-training R network with batch_x & batch_x_noise
-			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+		# Re-training R network with batch_x & batch_x_noise
+		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
