@@ -59,8 +59,11 @@ else:
 if len(sys.argv) > 7:
 	if trainMode == TRIPLE: # augment data
 		stopTrainThre = float(sys.argv[7])
+
 		if int(sys.argv[8])==1:
 			isANet = True
+		else:
+			isANet = False
 			
 
 	elif trainMode == ALOCC: # stopping Qriteria
@@ -430,58 +433,22 @@ def CNet(x, out_dim=1, reuse=False, keepProb=1.0, training=False):
 #######################
 
 #######################
-# Adversarial Network
-# 
-# reuse=Trueで再利用できる（tf.variable_scope() は，変数の管理に用いるスコープ定義）
-def ANet(x, z_dim=1, reuse=False, keepProb=1.0, augRatio=1, training=False):
-	with tf.variable_scope('ANet') as scope:
-		if reuse:
-			scope.reuse_variables()
-
-		'''
-
-		h_dim = int(z_dim/2)	
-
-		fcW1 = weight_variable("fcW1", [z_dim, h_dim])
-		#fcB1 = bias_variable("fcB1", [h_dim])
-		#fc1 = fc_relu(x, fcW1, fcB1, keepProb)
-		fc1 = fc_relu_nobias(x, fcW1, keepProb)
-		fcW2 = weight_variable("fcW2", [h_dim, z_dim])
-		#fcB2 = bias_variable("fcB2", [z_dim])
-		#fc2 = fc(fc1, fcW2, fcB2, keepProb)
-		fc2 = fc_nobias(fc1, fcW2, keepProb)
-		'''
-
-		mean, var = tf.nn.moments(x, axes=[0])
-		sigmaD1 = tf.get_variable('sigmaD1', [z_dim], initializer=tf.constant_initializer(1.0))
-		gauss1 = tfd.MultivariateNormalDiag(loc=np.zeros(z_dim,dtype=np.float32), scale_diag=var*sigmaD1)
-		noise1 = gauss1.sample(batchSize*augRatio)
-
-		output = tf.tile(x,[augRatio,1]) + noise1
-		#output = tf.tile(fc2,[augRatio,1])
-
-		return output, sigmaD1
-#######################
-
-#######################
 # Rのエンコーダとデコーダの連結
 xTrain = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 xTrainNoise = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 xTest = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 xTestNoise = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
+zTrainNoise = tf.placeholder(tf.float32, shape=[None, z_dim_R])
 
 
 # 学習用
 encoderR_train = encoderR(xTrainNoise, z_dim_R, keepProb=keepProbTrain, training=True)
 decoderR_train = decoderR(encoderR_train, z_dim_R, keepProb=keepProbTrain, training=True)
 
-mean, var = tf.nn.moments(encoderR_train, axes=[0])
-gauss1 = tfd.MultivariateNormalDiag(loc=np.zeros(z_dim_R,dtype=np.float32), scale_diag=tf.ones(z_dim_R))
-noise1 = gauss1.sample(batchSize)
+# ノイズの付加
+encoderR_train_abnormal = encoderR_train + zTrainNoise
 
-encoderR_train_abnormal, sigmaD1 = ANet(encoderR_train, z_dim_R, keepProb=keepProbTrain, augRatio=augRatio, training=True)
-encoderR_train_abnormal_noise  = encoderR_train + noise1
-decoderR_train_abnormal = decoderR(encoderR_train_abnormal_noise, z_dim_R, reuse=True, keepProb=1.0, training=False)
+decoderR_train_abnormal = decoderR(encoderR_train_abnormal, z_dim_R, reuse=True, keepProb=1.0, training=False)
 
 # テスト用
 encoderR_test = encoderR(xTestNoise, z_dim_R, reuse=True, keepProb=1.0)
@@ -491,12 +458,16 @@ decoderR_test = decoderR(encoderR_test, z_dim_R, reuse=True, keepProb=1.0)
 #######################
 # 学習用
 
-predictFake_logit_train, predictFake_train  = DNet(decoderR_train, keepProb=keepProbTrain, training=True)
-predictTrue_logit_train, predictTrue_train = DNet(xTrain,reuse=True, keepProb=keepProbTrain, training=True)
+_, predictFake_train  = DNet(decoderR_train, keepProb=keepProbTrain, training=True)
+_, predictTrue_train = DNet(xTrain,reuse=True, keepProb=keepProbTrain, training=True)
 
-predictNormal_logit_train, predictNormal_train = CNet(xTrain, keepProb=keepProbTrain, training=True)
-predictAbnormal_logit_train, predictAbnormal_train = CNet(decoderR_train_abnormal, reuse=True, keepProb=keepProbTrain, training=True)
-predictAbnormal_logit_train_orig, predictAbnormal_train_orig = CNet(decoderR_train, reuse=True, keepProb=keepProbTrain, training=True)
+
+_, predictNormal_train = CNet(xTrain, keepProb=keepProbTrain, training=True)
+
+if isANet:
+	_, predictAbnormal_train = CNet(decoderR_train_abnormal, reuse=True, keepProb=keepProbTrain, training=True)
+else:
+	_, predictAbnormal_train = CNet(decoderR_train, reuse=True, keepProb=keepProbTrain, training=True)
 #######################
 
 #######################
@@ -512,67 +483,7 @@ lossRAll = -tf.reduce_mean(tf.log(1 - predictFake_train + lambdaSmall)) + alpha 
 #====================
 # D and C Networks
 lossD = -tf.reduce_mean(tf.log(predictTrue_train  + lambdaSmall)) - tf.reduce_mean(tf.log(1 - predictFake_train +  lambdaSmall))
-
-if isANet:
-	#lossC =  -tf.reduce_mean(tf.log(predictAbnormal_train + lambdaSmall)) - tf.reduce_mean(tf.log(predictAbnormal_train_orig + lambdaSmall)) \
-	lossC =  -tf.reduce_mean(tf.log(predictAbnormal_train + lambdaSmall)) \
-	 		- tf.reduce_mean(tf.log(1 - predictNormal_train + lambdaSmall)) 
-else:
-	lossC = -tf.reduce_mean(tf.log(predictAbnormal_train_orig + lambdaSmall)) - tf.reduce_mean(tf.log(1 - predictNormal_train + lambdaSmall)) 
-
-#====================
-
-#====================
-# A Network
-#---------------
-# difference after decoding
-decoderSize = np.prod(decoderR_train.get_shape().as_list()[1:])
-
-# reshape
-xTrain_reshape = tf.reshape(xTrain,[-1,decoderSize])
-xTrain_reshape2 = tf.reshape(tf.tile(xTrain_reshape,[1,batchSize]),[batchSize**2,-1])
-decoderR_train_abnormal_reshape = tf.reshape(decoderR_train_abnormal,[-1,decoderSize]) 
-decoderR_train_abnormal_reshape1 = tf.tile(decoderR_train_abnormal_reshape,[batchSize,1])
-decoderR_train_abnormal_reshape2 = tf.reshape(tf.tile(decoderR_train_abnormal_reshape,[1,batchSize]),[batchSize**2,-1])
-
-# variance
-_, decoderR_train_abnormal_var = tf.nn.moments(decoderR_train_abnormal_reshape, axes=[0])
-
-# diff
-diff2xTrain_cross = tf.norm(xTrain_reshape2 - decoderR_train_abnormal_reshape1, axis=1)/decoderSize
-diff2xTrain = tf.norm(xTrain_reshape - decoderR_train_abnormal_reshape, axis=1)/decoderSize
-diffSelf_cross = tf.norm(decoderR_train_abnormal_reshape1 - decoderR_train_abnormal_reshape2, axis=1)/decoderSize
-
-'''
-lossA = -beta*tf.reduce_mean(tf.log(1-predictAbnormal_train + lambdaSmall)) - tf.reduce_mean(tf.log(diff2xTrain + lambdaSmall))\
-	 #- tf.reduce_mean(tf.log(decoderR_train_abnormal_var + lambdaSmall))\
-	 #+ tf.reduce_sum(tf.norm(ANet_fcW1,axis=0)) + tf.reduce_sum(tf.norm(ANet_fcW2,axis=0))
-'''
-#---------------
-
-#---------------
-# difference after encoding
-encoderSize = np.prod(encoderR_train.get_shape().as_list()[1:])
-
-# reshape
-encoderR_train_reshape = tf.reshape(encoderR_train,[-1,encoderSize])
-encoderR_train_reshape2 = tf.reshape(tf.tile(encoderR_train_reshape,[1,batchSize]),[batchSize**2,-1])
-encoderR_train_abnormal_reshape = tf.reshape(encoderR_train_abnormal,[-1,encoderSize]) 
-encoderR_train_abnormal_reshape1 = tf.tile(encoderR_train_abnormal_reshape,[batchSize,1])
-encoderR_train_abnormal_reshape2 = tf.reshape(tf.tile(encoderR_train_abnormal_reshape,[1,batchSize]),[batchSize**2,-1])
-
-# diff
-diff2xTrain_cross_encoder = tf.norm(encoderR_train_reshape2 - encoderR_train_abnormal_reshape1, axis=1)/encoderSize
-diff2xTrain_encoder = tf.norm(encoderR_train_reshape - encoderR_train_abnormal_reshape, axis=1)/encoderSize
-diffSelf_cross_encoder = tf.norm(encoderR_train_abnormal_reshape1 - encoderR_train_abnormal_reshape2, axis=1)/encoderSize
-
-# variance
-_, encoderR_train_abnormal_var = tf.nn.moments(encoderR_train_abnormal, axes=[0])
-
-lossA = -beta*tf.reduce_mean(tf.log(1-predictAbnormal_train + lambdaSmall)) - tf.reduce_mean(tf.log(diff2xTrain_encoder + lambdaSmall)) \
-	#- tf.reduce_mean(tf.log(encoderR_train_abnormal_var + lambdaSmall))\
-	#+ tf.reduce_sum(tf.norm(ANet_fcW1,axis=0)) + tf.reduce_sum(tf.norm(ANet_fcW2,axis=0))
-#---------------
+lossC = -tf.reduce_mean(tf.log(predictAbnormal_train + lambdaSmall)) - tf.reduce_mean(tf.log(1 - predictNormal_train + lambdaSmall)) 
 
 #====================
 #######################
@@ -597,13 +508,8 @@ with tf.control_dependencies(extra_update_ops):
 	trainerC = tf.train.AdamOptimizer(1e-3).minimize(lossC, var_list=Cvars)
 
 
-optimizer = tf.train.AdamOptimizer()
-gvsC = optimizer.compute_gradients(lossC, var_list=Cvars)
-
-extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope="ANet")
-with tf.control_dependencies(extra_update_ops):
-	Avars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="ANet")
-	trainerA = tf.train.AdamOptimizer(1e-3).minimize(lossA, var_list=Avars)
+# gradients of embeddings
+encoderR_train_grad = tf.gradients(lossC, encoderR_train)
 
 '''
 optimizer = tf.train.AdamOptimizer()
@@ -628,10 +534,10 @@ trainerC = optimizer.apply_gradients(capped_gvsC)
 
 #######################
 #テスト用
-predictDX_logit, predictDX = DNet(xTest,reuse=True, keepProb=1.0)
-predictDRX_logit, predictDRX = DNet(decoderR_test,reuse=True, keepProb=1.0)
-predictCX_logit, predictCX = CNet(xTest,reuse=True, keepProb=1.0)
-predictCRX_logit, predictCRX = CNet(decoderR_test,reuse=True, keepProb=1.0)
+_, predictDX = DNet(xTest,reuse=True, keepProb=1.0)
+_, predictDRX = DNet(decoderR_test,reuse=True, keepProb=1.0)
+_, predictCX = CNet(xTest,reuse=True, keepProb=1.0)
+_, predictCRX = CNet(decoderR_test,reuse=True, keepProb=1.0)
 #######################
 
 #######################
@@ -697,7 +603,6 @@ lossR_values = []
 lossRAll_values = []
 lossD_values = []
 lossC_values = []
-lossA_values = []
 #=======================
 
 
@@ -786,14 +691,19 @@ while not isStop:
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
-		# training A network
-		#_, lossA_value, reshape1, reshape2, diff1, diff2 = sess.run([trainerA, lossA, decoderR_train_abnormal_reshape1, decoderR_train_abnormal_reshape2, decoderR_train_abnormal, diff2xTrain],feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
-		_, lossA_value, sigmaD1_value = sess.run([trainerA, lossA, sigmaD1],feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
+		if ite == 1:
+			batch_z_noise = np.zeros([batchSize, z_dim_R])
+
+
 
 		# training C network 
-		_, lossC_value, predictAbnormal_train_value, predictNormal_train_value, decoderR_train_abnormal_value = sess.run(
-									[trainerC, lossC, predictAbnormal_train, predictNormal_train, decoderR_train_abnormal],
-									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
+		_, lossC_value, predictAbnormal_train_value, predictNormal_train_value, decoderR_train_abnormal_value, encoderR_train_grad_value = sess.run(
+									[trainerC, lossC, predictAbnormal_train, predictNormal_train, decoderR_train_abnormal, encoderR_train_grad],
+									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise, zTrainNoise: batch_z_noise})
+
+		# 勾配を用いてノイズを作成
+		batch_z_noise = encoderR_train_grad_value[0]
+		batch_z_noise = batch_z_noise/np.tile(np.max(np.abs(batch_z_noise),axis=1,keepdims=True),[1,z_dim_R])
 
 
 	#=======================
@@ -819,12 +729,11 @@ while not isStop:
 
 	if (trainMode == TRIPLE):
 		lossC_values.append(lossC_value)
-		lossA_values.append(lossA_value)
 	
 
 	if ite%100 == 0:
 		if (trainMode == TRIPLE):
-			print("%s: #%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f, lossC=%f, lossA=%f" % (trainModeStr, ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value, lossC_value, lossA_value))
+			print("%s: #%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f, lossC=%f" % (trainModeStr, ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value, lossC_value))
 		else:
 			print("%s: #%d %d(%d), lossR=%f, lossRAll=%f, lossD=%f" % (trainModeStr, ite, targetChar, trialNo, lossR_value, lossRAll_value, lossD_value))
 	#====================
@@ -924,7 +833,6 @@ while not isStop:
 
 				predictCX_value[ind], predictCRX_value[ind] = sess.run([predictCX, predictCRX], feed_dict={xTest: test_x, xTestNoise: test_x_noise})
 
-				pdb.set_trace()
 			#--------------------------
 
 			#--------------------------
@@ -1154,7 +1062,6 @@ with open(path, "wb") as fp:
 
 	if trainMode == TRIPLE:
 		pickle.dump(lossC_values,fp)
-		pickle.dump(lossA_values,fp)
 		pickle.dump(decoderR_train_abnormal_value,fp)
 
 	pickle.dump(params,fp)
