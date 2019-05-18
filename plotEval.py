@@ -39,7 +39,7 @@ elif trainMode == TRIPLE:
 	beta = float(sys.argv[5])
 
 # trial numbers
-trialNos = [0,1,2]
+trialNos = [0,1]
 
 # Iteration
 nIte = 10000

@@ -619,22 +619,35 @@ while not isStop:
 
 	#=======================
 	# ALOCC(Adversarially Learned One-Class Classifier)の学習
-	if (trainMode == ALOCC and isTrain):
+	if (trainMode == ALOCC):
 
-		# training R network with batch_x & batch_x_noise
-		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+		if isTrain:
+			# training R network with batch_x & batch_x_noise
+			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
-		# training D network with batch_x & batch_x_noise
-		_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
+			# training D network with batch_x & batch_x_noise
+			_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 									[trainerD, lossD, predictFake_train, predictTrue_train],
 									feed_dict={xTrain: batch_x,xTrainNoise: batch_x_noise})
 
-		# Re-training R network with batch_x & batch_x_noise
-		_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+			# Re-training R network with batch_x & batch_x_noise
+			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
+
+		else:
+			# training D network with batch_x & batch_x_noise
+			lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
+									[lossD, predictFake_train, predictTrue_train],
+									feed_dict={xTrain: batch_x,xTrainNoise: batch_x_noise})
+
+			# Re-training R network with batch_x & batch_x_noise
+			lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+									[lossR, lossRAll, decoderR_train, encoderR_train],
+									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
+			
 
 	#=======================
 	# GAN(Generative Adversarial Net)の学習
