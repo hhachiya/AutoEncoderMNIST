@@ -41,6 +41,9 @@ alpha = 0.2
 # lossAのCNetの重み係数
 beta = 1.0
 
+# DNet stop
+isDNetStop = True
+
 # trail no.
 if len(sys.argv) > 2:
 	targetChar = int(sys.argv[2])
@@ -63,6 +66,11 @@ if len(sys.argv) > 7:
 
 	elif trainMode == ALOCC: # stopping Qriteria
 		stopTrainThre = float(sys.argv[7])
+
+		if int(sys.argv[8]) == 1:
+			isDNetStop = True
+		else:
+			isDNetStop = False
 
 
 # log(0)と0割防止用
@@ -89,7 +97,11 @@ nPlotImg = 10
 
 # ファイル名のpostFix
 if trainMode == ALOCC:
-	trainModeStr = 'ALOCC'	
+	if isDNetStop:
+		trainModeStr = 'ALOCC'	
+	else:
+		trainModeStr = 'ALOCC_DNet'	
+		
 	postFix = "_{}_{}_{}_{}_{}_{}".format(trainModeStr,targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre)
 
 elif trainMode == GAN:
@@ -627,22 +639,24 @@ while not isStop:
 									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
 									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
 
+
+		if isTrain or not isDNetStop:
 			# training D network with batch_x & batch_x_noise
 			_, lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 									[trainerD, lossD, predictFake_train, predictTrue_train],
 									feed_dict={xTrain: batch_x,xTrainNoise: batch_x_noise})
-
-			# Re-training R network with batch_x & batch_x_noise
-			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
-									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
-									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
-
 		else:
 			# training D network with batch_x & batch_x_noise
 			lossD_value, predictFake_train_value, predictTrue_train_value = sess.run(
 									[lossD, predictFake_train, predictTrue_train],
 									feed_dict={xTrain: batch_x,xTrainNoise: batch_x_noise})
 
+		if isTrain:
+			# Re-training R network with batch_x & batch_x_noise
+			_, lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
+									[trainerRAll, lossR, lossRAll, decoderR_train, encoderR_train],
+									feed_dict={xTrain: batch_x, xTrainNoise: batch_x_noise})
+		else:
 			# Re-training R network with batch_x & batch_x_noise
 			lossR_value, lossRAll_value, decoderR_train_value, encoderR_train_value = sess.run(
 									[lossR, lossRAll, decoderR_train, encoderR_train],
