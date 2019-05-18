@@ -23,8 +23,6 @@ TRIPLE = 2
 #-------------
 
 #-------------
-isANet = False
-
 trainMode = int(sys.argv[1])
 
 if trainMode == ALOCC:
@@ -38,17 +36,10 @@ elif trainMode == TRIPLE:
 	noiseSigma = float(sys.argv[2])
 	z_dim_R = int(sys.argv[3])
 	stopTrainThre = float(sys.argv[4])
-	if int(sys.argv[5]) == 1:
-		isANet = True
-	else:
-		isANet = False
-	
-
-# lossAのCNetの重み係数
-beta = 1.0
+	beta = float(sys.argv[5])
 
 # trial numbers
-trialNos = [0]
+trialNos = [0,1,2]
 
 # Iteration
 nIte = 10000
@@ -71,10 +62,7 @@ if trainMode == ALOCC:
 elif trainMode == GAN:
 	postFixStr = 'GAN'
 elif trainMode == TRIPLE:
-	if isANet:
-		postFixStr = 'TRIPLE_ANet'
-	else:
-		postFixStr = 'TRIPLE'
+	postFixStr = 'TRIPLE'
 #-------------
 
 #===========================
@@ -149,7 +137,7 @@ def loadParams(path):
 
 		params = pickle.load(fp)	
 
-		return recallDXs, precisionDXs, f1DXs, aucDXs, aucDXs_inv, recallDRXs, precisionDRXs, f1DRXs, aucDRXs, aucDRXs_inv, recallCXs, precisionCXs, f1CXs, aucCXs, recallCRXs, precisionCRXs, f1CRXs, aucCRXs, recallGXs, precisionGXs, f1GXs, aucGXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value, lossC_values, lossA_values
+		return recallDXs, precisionDXs, f1DXs, aucDXs, aucDXs_inv, recallDRXs, precisionDRXs, f1DRXs, aucDRXs, aucDRXs_inv, recallCXs, precisionCXs, f1CXs, aucCXs, recallCRXs, precisionCRXs, f1CRXs, aucCRXs, recallGXs, precisionGXs, f1GXs, aucGXs, lossR_values, lossRAll_values, lossD_values, encoderR_train_value, lossC_values
 #===========================
 
 #===========================
@@ -184,8 +172,6 @@ lossR_values = [[] for tmp in targetChars]
 lossRAll_values = [[] for tmp in targetChars]
 lossD_values = [[] for tmp in targetChars]
 lossC_values = [[] for tmp in targetChars]
-lossA_values = [[] for tmp in targetChars]
-maxInds = [[] for tmp in targetChars]
 #===========================
 
 #===========================
@@ -198,17 +184,14 @@ for targetChar in targetChars:
 		elif trainMode == GAN:
 			postFix = "_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma)
 		elif trainMode == TRIPLE:
-			if isANet:
-				postFix = "_{}_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre, beta)
-			else:
-				postFix = "_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre)
+			postFix = "_{}_{}_{}_{}_{}_{}_{}".format(postFixStr, targetChar, trialNo, z_dim_R, noiseSigma, stopTrainThre, beta)
 
 
 		#--------------
 		# pickleから読み込み
 		path = os.path.join(logPath,"log{}.pickle".format(postFix))
 
-		recallDXs_, precisionDXs_, f1DXs_, aucDXs_, aucDXs_inv_, recallDRXs_, precisionDRXs_, f1DRXs_, aucDRXs_, aucDRXs_inv_, recallCXs_, precisionCXs_, f1CXs_, aucCXs_, recallCRXs_, precisionCRXs_, f1CRXs_, aucCRXs_, recallGXs_, precisionGXs_, f1GXs_, aucGXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_, lossC_values_, lossA_values_ = loadParams(path)
+		recallDXs_, precisionDXs_, f1DXs_, aucDXs_, aucDXs_inv_, recallDRXs_, precisionDRXs_, f1DRXs_, aucDRXs_, aucDRXs_inv_, recallCXs_, precisionCXs_, f1CXs_, aucCXs_, recallCRXs_, precisionCRXs_, f1CRXs_, aucCRXs_, recallGXs_, precisionGXs_, f1GXs_, aucGXs_, lossR_values_, lossRAll_values_, lossD_values_, encoderR_train_value_, lossC_values_ = loadParams(path)
 		#--------------
 
 		#--------------
@@ -248,12 +231,8 @@ for targetChar in targetChars:
 		lossRAll_values[targetChar].append(lossRAll_values_)
 		lossD_values[targetChar].append(lossD_values_)
 		lossC_values[targetChar].append(lossC_values_)
-		lossA_values[targetChar].append(lossA_values_)
 		#--------------
 
-	#--------------
-	# 最大のlossDに対応するF1 score 
-	maxInds[targetChar] = np.argmax(np.array(f1DXs[targetChar])[:,-1,resInd])
 	#--------------
 #===========================
 
@@ -288,17 +267,17 @@ aucsCR = [[] for tmp in np.arange(len(targetChars))]
 
 for targetChar in targetChars:
 	# D net
-	recallsD_ = np.array(recallDXs[targetChar][maxInds[targetChar]])[:,resInd]
-	precisionsD_ = np.array(precisionDXs[targetChar][maxInds[targetChar]])[:,resInd]
-	f1sD_ = np.array(f1DXs[targetChar][maxInds[targetChar]])[:,resInd]
-	aucsD_ = np.array(aucDXs[targetChar][maxInds[targetChar]])[:,resInd]
-	aucsD_inv_ = np.array(aucDXs_inv[targetChar][maxInds[targetChar]])[:,resInd]
+	recallsD_ = np.mean(np.array(recallDXs[targetChar]),axis=0)[:,resInd]
+	precisionsD_ = np.mean(np.array(precisionDXs[targetChar]),axis=0)[:,resInd]
+	f1sD_ = np.mean(np.array(f1DXs[targetChar]),axis=0)[:,resInd]
+	aucsD_ = np.mean(np.array(aucDXs[targetChar]),axis=0)[:,resInd]
+	aucsD_inv_ = np.mean(np.array(aucDXs_inv[targetChar]),axis=0)[:,resInd]
 
-	recallsDR_ = np.array(recallDRXs[targetChar][maxInds[targetChar]])[:,resInd]
-	precisionsDR_ = np.array(precisionDRXs[targetChar][maxInds[targetChar]])[:,resInd]
-	f1sDR_ = np.array(f1DRXs[targetChar][maxInds[targetChar]])[:,resInd]
-	aucsDR_ = np.array(aucDRXs[targetChar][maxInds[targetChar]])[:,resInd]
-	aucsDR_inv_ = np.array(aucDRXs_inv[targetChar][maxInds[targetChar]])[:,resInd]
+	recallsDR_ = np.mean(np.array(recallDRXs[targetChar]),axis=0)[:,resInd]
+	precisionsDR_ = np.mean(np.array(precisionDRXs[targetChar]),axis=0)[:,resInd]
+	f1sDR_ = np.mean(np.array(f1DRXs[targetChar]),axis=0)[:,resInd]
+	aucsDR_ = np.mean(np.array(aucDRXs[targetChar]),axis=0)[:,resInd]
+	aucsDR_inv_ = np.mean(np.array(aucDRXs_inv[targetChar]),axis=0)[:,resInd]
 
 	recallsD[targetChar] = recallsD_
 	precisionsD[targetChar] = precisionsD_
@@ -314,10 +293,10 @@ for targetChar in targetChars:
 
 	# GAN
 	if trainMode == GAN:
-		recallsG_ = np.array(recallGXs[targetChar][maxInds[targetChar]])[:,resInd]
-		precisionsG_ = np.array(precisionGXs[targetChar][maxInds[targetChar]])[:,resInd]
-		f1sG_ = np.array(f1GXs[targetChar][maxInds[targetChar]])[:,resInd]
-		aucsG_ = np.array(aucGXs[targetChar][maxInds[targetChar]])[:,resInd]
+		recallsG_ = np.mean(np.array(recallGXs[targetChar]),axis=0)[:,resInd]
+		precisionsG_ = np.mean(np.array(precisionGXs[targetChar]),axis=0)[:,resInd]
+		f1sG_ = np.mean(np.array(f1GXs[targetChar]),axis=0)[:,resInd]
+		aucsG_ = np.mean(np.array(aucGXs[targetChar]),axis=0)[:,resInd]
 
 		recallsG[targetChar] = recallsG_
 		precisionsG[targetChar] = precisionsG_
@@ -326,14 +305,14 @@ for targetChar in targetChars:
 
 	# C net
 	if trainMode == TRIPLE:
-		recallsC_ = np.array(recallCXs[targetChar][maxInds[targetChar]])[:,resInd]
-		precisionsC_ = np.array(precisionCXs[targetChar][maxInds[targetChar]])[:,resInd]
-		f1sC_ = np.array(f1CXs[targetChar][maxInds[targetChar]])[:,resInd]
-		aucsC_ = np.array(aucCXs[targetChar][maxInds[targetChar]])[:,resInd]
-		recallsCR_ = np.array(recallCRXs[targetChar][maxInds[targetChar]])[:,resInd]
-		precisionsCR_ = np.array(precisionCRXs[targetChar][maxInds[targetChar]])[:,resInd]
-		f1sCR_ = np.array(f1CRXs[targetChar][maxInds[targetChar]])[:,resInd]
-		aucsCR_ = np.array(aucCRXs[targetChar][maxInds[targetChar]])[:,resInd]
+		recallsC_ = np.mean(np.array(recallCXs[targetChar]),axis=0)[:,resInd]
+		precisionsC_ = np.mean(np.array(precisionCXs[targetChar]),axis=0)[:,resInd]
+		f1sC_ = np.mean(np.array(f1CXs[targetChar]),axis=0)[:,resInd]
+		aucsC_ = np.mean(np.array(aucCXs[targetChar]),axis=0)[:,resInd]
+		recallsCR_ = np.mean(np.array(recallCRXs[targetChar]),axis=0)[:,resInd]
+		precisionsCR_ = np.mean(np.array(precisionCRXs[targetChar]),axis=0)[:,resInd]
+		f1sCR_ = np.mean(np.array(f1CRXs[targetChar]),axis=0)[:,resInd]
+		aucsCR_ = np.mean(np.array(aucCRXs[targetChar]),axis=0)[:,resInd]
 
 		recallsC[targetChar] = recallsC_
 		precisionsC[targetChar] = precisionsC_
